@@ -1,0 +1,2 @@
+#define countmap_VERSION_MAJOR @countmap_VERSION_MAJOR@
+#define countmap_VERSION_MINOR @countmap_VERSION_MINOR@
