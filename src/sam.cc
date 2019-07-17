@@ -8,7 +8,6 @@
 #include <utility>
 #include <tuple>
 #include <algorithm>
-#include <iostream>
 
 #include "sam.hpp"
 #include "mapping_params.hpp"
