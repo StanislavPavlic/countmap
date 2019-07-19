@@ -99,6 +99,20 @@ std::tuple<uint32_t, int32_t, std::string> ksw2(const char* target, const uint32
 // Args: m - mapping information
 // Return: SAM format string
 std::string sam_format(const mapping_t& m) {
+  // std::cerr << "ENTERED SAM" << std::endl;
+  // std::cerr << m.qname << std::endl;
+  // std::cerr << m.flag << std::endl;
+  // std::cerr << m.rname << std::endl;
+  // std::cerr << m.pos << std::endl;
+  // std::cerr << m.mapq << std::endl;
+  // std::cerr << m.cigar << std::endl;
+  // std::cerr << m.rnext << std::endl;
+  // std::cerr << m.pnext << std::endl;
+  // std::cerr << m.tlen << std::endl;
+  // std::cerr << m.seq << std::endl;
+  // std::cerr << m.qual << std::endl;
+  // std::cerr << m.nm << std::endl;
+  // std::cerr << m.as << std::endl;
   std::string sam = m.qname + "\t" +
                     std::to_string(m.flag) + "\t" +
                     m.rname + "\t" +
@@ -112,6 +126,7 @@ std::string sam_format(const mapping_t& m) {
                     (m.flag & 0x100 ? "*" : m.qual) + "\t" +
                     "NM:i:" + std::to_string(m.nm) + "\t" +
                     "AS:i:" + std::to_string(m.as) + "\n";
+  // std::cerr << "EXIT SAM" << std::endl;                    
   return sam;
 }
 
@@ -243,6 +258,10 @@ std::pair<mapping_t, mapping_t> pair_mapping(const std::string& qname,
   uint32_t len1 = (query1.size() - end_off1) - start_off1;
   uint32_t len2 = (query2.size() - end_off2) - start_off2;
 
+  // std::cerr << "REF START " << std::get<1>(region_pair.first.first) + ref_off1 << ", " << len1 << std::endl;
+  // std::cerr << "QUE START " << start_off1 << ", " << len1 << std::endl;
+  // std::cerr << "REF START " << std::get<1>(region_pair.second.first) + ref_off2 << ", " << len2 << std::endl;
+  // std::cerr << "QUE START " << start_off2 << ", " << len2 << std::endl;
   std::tuple<uint32_t, int32_t, std::string> cigar1 = ksw2(ref.c_str() + std::get<1>(region_pair.first.first) + ref_off1, len1, 
                                                            query1.c_str() + start_off1, len1, 
                                                            parameters);

@@ -212,7 +212,7 @@ std::vector<mapping_t> process_single(const std::unordered_map<uint64_t, index_p
         mappings[i].mapq = 0;
       }
     }
-  } else if (mappings_c.size() && (mappings.size() == 0 || (mappings_c[0].as - mappings[0].as))) {
+  } else if (mappings_c.size() && (mappings.size() == 0 || (mappings_c[0].as + mappings_c[1].as > mappings[0].as))) {
     return mappings_c;
   } else {
     uint32_t i = 1;
@@ -248,13 +248,19 @@ void process_pairs(std::vector<std::pair<mapping_t, mapping_t>>& mappings,
     std::pair<region_t, region_t> region_pair(find_region(checked.first[j]),
                                               find_region(checked.second[j]));
 
+    // std::cerr << "(" << std::get<0>(region_pair.first.first) << ", " << std::get<1>(region_pair.first.first) << ")-(" << std::get<0>(region_pair.first.second) << ", " << std::get<1>(region_pair.first.second) << ") | " << std::get<2>(region_pair.first.first) << std::endl;
+    // std::cerr << "(" << std::get<0>(region_pair.second.first) << ", " << std::get<1>(region_pair.second.first) << ")-(" << std::get<0>(region_pair.second.second) << ", " << std::get<1>(region_pair.second.second) << ") | " << std::get<2>(region_pair.second.first) << std::endl;
+
     expand_region(region_pair.first, first->sequence.size(), 
                   parameters.k, reference->sequence.size());
     expand_region(region_pair.second, second->sequence.size(), 
                   parameters.k, reference->sequence.size());
 
-    if (processed.find(std::get<1>(region_pair.first.first)) != processed.end()) continue;
-    processed.insert(std::get<1>(region_pair.first.first));
+    // std::cerr << "(" << std::get<0>(region_pair.first.first) << ", " << std::get<1>(region_pair.first.first) << ")-(" << std::get<0>(region_pair.first.second) << ", " << std::get<1>(region_pair.first.second) << ") | " << std::get<2>(region_pair.first.first) << std::endl;
+    // std::cerr << "(" << std::get<0>(region_pair.second.first) << ", " << std::get<1>(region_pair.second.first) << ")-(" << std::get<0>(region_pair.second.second) << ", " << std::get<1>(region_pair.second.second) << ") | " << std::get<2>(region_pair.second.first) << std::endl;
+
+    // if (processed.find(std::get<1>(region_pair.first.first)) != processed.end()) continue;
+    // processed.insert(std::get<1>(region_pair.first.first));
 
     std::string rc;
     std::string rq;
@@ -469,9 +475,150 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
         extract_candidates(hits2.first, parameters.threshold, paired_reads.second[i]->sequence.size()));
 
     paired_checked_t checked1 = check_pairing(candidates1, parameters.insert_size,
-                                              paired_reads.second[i]->sequence.size());
+                                              paired_reads.second[i]->sequence.size(), reference->sequence.size());
     paired_checked_t checked2 = check_pairing(candidates2, parameters.insert_size,
-                                              paired_reads.first[i]->sequence.size());
+                                              paired_reads.first[i]->sequence.size(), reference->sequence.size());
+
+    // std::cerr << "CHECKED IN" << std::endl;
+    if (checked1.first.size() == 2) {
+      // std::cerr << std::get<1>(checked1.first[0][0]) << ", " << std::get<1>(checked1.second[0][0]) << ", " << std::get<1>(checked1.first[1][0]) << ", " << std::get<1>(checked1.second[1][0]) << std::endl;
+      if (std::get<1>(checked1.first[1][0]) == (uint32_t)-1 || std::get<1>(checked1.second[1][0]) == (uint32_t)-1) {
+        // std::cerr << "CIRC IN" << std::endl;
+        if (std::get<1>(checked1.first[1][0]) == (uint32_t)-1) {
+          checked1.first[1] = checked1.first[0];
+        } else {
+          checked1.second[1] = checked1.second[0];
+        }
+        // std::cerr << std::get<1>(checked1.first[0][0]) << ", " << std::get<1>(checked1.second[0][0]) << ", " << std::get<1>(checked1.first[1][0]) << ", " << std::get<1>(checked1.second[1][0]) << std::endl;
+        std::vector<std::pair<mapping_t, mapping_t>> mappings;
+        process_pairs(mappings, checked1, reference, paired_reads.first[i], paired_reads.second[i], parameters, clipped1, clipped2);
+        // std::sort(mappings.begin(), mappings.end(), 
+        //           [] (const std::pair<mapping_t, mapping_t>& a, 
+        //               const std::pair<mapping_t, mapping_t>& b) {
+        //             return a.first.mapq + a.second.mapq > b.first.mapq + b.second.mapq;
+        //           }
+        // );
+        // std::cerr << "SAM START" << std::endl;
+        std::string sam1, sam2;
+        // std::cerr << mappings[0].first.pos << ", " << mappings[0].second.pos << ", " << mappings[1].first.pos << ", " << mappings[1].second.pos << std::endl;
+        if (mappings[0].first.pos == mappings[1].first.pos) {
+          // std::cerr << "FIRST CASE" << std::endl;
+          mappings[1].second.flag |= 0x800;
+          sam1 += sam_format(mappings[0].first);
+          sam2 += sam_format(mappings[0].second);
+          sam2 += sam_format(mappings[1].second);
+        } else {
+          // std::cerr << "SECOND CASE" << std::endl;
+          mappings[1].first.flag |= 0x800;
+          // std::cerr << "FLAGGED" << std::endl;
+          sam1 += sam_format(mappings[0].first);
+          sam1 += sam_format(mappings[1].first);
+          sam2 += sam_format(mappings[0].second);
+        }
+        // std::cerr << "SAM END" << std::endl;
+        sam += sam1 + sam2;
+        // std::cerr << "CIRC OUT" << std::endl;
+        continue;
+      }
+
+      // if (std::get<1>(checked1.first[0][0]) == std::get<1>(checked1.first[1][0])) {
+      //   region_t reg = find_region(checked1.first[0]);
+      //   region_t reg_s = find_region(checked1.second[0]);
+      //   region_t reg_e = find_region(checked1.second[1]);
+
+      //   if (std::get<2>(reg.first)) {
+      //     std::get<0>(reg_s.first) -= std::get<1>(reg_s.first);
+      //     std::get<1>(reg_s.first) = 0;
+      //     std::get<1>(reg_s.second) += read->sequence.size() - std::get<0>(reg_s.second);
+      //     std::get<0>(reg_s.second) = read->sequence.size();
+
+      //     std::get<1>(reg_e.first) -= std::get<0>(reg_e.first);
+      //     std::get<0>(reg_e.first) = 0;
+      //     std::get<0>(reg_e.second) += reference->sequence.size() - std::get<1>(reg_e.second);
+      //     std::get<1>(reg_e.second) = reference->sequence.size(); 
+      //   } else {
+      //     std::get<0>(reg_s.second) += std::get<1>(reg_s.first) + parameters.k;
+      //     std::get<1>(reg_s.first) = 0;
+      //     std::get<1>(reg_s.second) += std::get<0>(reg_s.first) + parameters.k;
+      //     std::get<0>(reg_s.first) = 0;
+
+      //     std::get<1>(reg_e.first) -= read->sequence.size() - std::get<0>(reg_e.second) - parameters.k;
+      //     std::get<0>(reg_e.second) = read->sequence.size();
+      //     std::get<0>(reg_e.first) -= reference->sequence.size() - std::get<1>(reg_e.second) - parameters.k;
+      //     std::get<1>(reg_e.second) = reference->sequence.size();
+      //   }
+      //   std::vector<std::pair<mapping_t, mapping_t>> mappings;
+
+      // } else if (std::get<1>(checked1.second[0][0]) == std::get<1>(checked1.second[1][0])) {
+      //   region_t reg = find_region(checked1.second[0]);
+      //   region_t reg_s = find_region(checked1.first[0]);
+      //   region_t reg_e = find_region(checked1.first[1]);
+
+      //   if (std::get<2>(reg.first)) {
+      //     std::get<0>(reg_s.first) -= std::get<1>(reg_s.first);
+      //     std::get<1>(reg_s.first) = 0;
+      //     std::get<1>(reg_s.second) += read->sequence.size() - std::get<0>(reg_s.second);
+      //     std::get<0>(reg_s.second) = read->sequence.size();
+
+      //     std::get<1>(reg_e.first) -= std::get<0>(reg_e.first);
+      //     std::get<0>(reg_e.first) = 0;
+      //     std::get<0>(reg_e.second) += reference->sequence.size() - std::get<1>(reg_e.second);
+      //     std::get<1>(reg_e.second) = reference->sequence.size(); 
+      //   } else {
+      //     std::get<0>(reg_s.second) += std::get<1>(reg_s.first) + parameters.k;
+      //     std::get<1>(reg_s.first) = 0;
+      //     std::get<1>(reg_s.second) += std::get<0>(reg_s.first) + parameters.k;
+      //     std::get<0>(reg_s.first) = 0;
+
+      //     std::get<1>(reg_e.first) -= read->sequence.size() - std::get<0>(reg_e.second) - parameters.k;
+      //     std::get<0>(reg_e.second) = read->sequence.size();
+      //     std::get<0>(reg_e.first) -= reference->sequence.size() - std::get<1>(reg_e.second) - parameters.k;
+      //     std::get<1>(reg_e.second) = reference->sequence.size();
+      //   }
+      // }
+    }
+    if (checked2.first.size() == 2) {
+      // std::cerr << std::get<1>(checked2.first[0][0]) << ", " << std::get<1>(checked2.second[0][0]) << ", " << std::get<1>(checked2.first[1][0]) << ", " << std::get<1>(checked2.second[1][0]) << std::endl;
+      if (std::get<1>(checked2.first[1][0]) == (uint32_t)-1 || std::get<1>(checked2.second[1][0]) == (uint32_t)-1) {
+        // std::cerr << "CIRC IN" << std::endl;
+        if (std::get<1>(checked2.first[1][0]) == (uint32_t)-1) {
+          checked2.first[1] = checked2.first[0];
+        } else {
+          checked2.second[1] = checked2.second[0];
+        }
+        // std::cerr << std::get<1>(checked2.first[0][0]) << ", " << std::get<1>(checked2.second[0][0]) << ", " << std::get<1>(checked2.first[1][0]) << ", " << std::get<1>(checked2.second[1][0]) << std::endl;
+        std::vector<std::pair<mapping_t, mapping_t>> mappings;
+        process_pairs(mappings, checked2, reference, paired_reads.first[i], paired_reads.second[i], parameters, clipped1, clipped2);
+        // std::sort(mappings.begin(), mappings.end(), 
+        //           [] (const std::pair<mapping_t, mapping_t>& a, 
+        //               const std::pair<mapping_t, mapping_t>& b) {
+        //             return a.first.mapq + a.second.mapq > b.first.mapq + b.second.mapq;
+        //           }
+        // );
+        // std::cerr << "SAM START" << std::endl;
+        std::string sam1, sam2;
+        // std::cerr << mappings[0].first.pos << ", " << mappings[0].second.pos << ", " << mappings[1].first.pos << ", " << mappings[1].second.pos << std::endl;
+        if (mappings[0].first.pos == mappings[1].first.pos) {
+          // std::cerr << "FIRST CASE" << std::endl;
+          mappings[1].second.flag |= 0x800;
+          sam1 += sam_format(mappings[0].first);
+          sam2 += sam_format(mappings[0].second);
+          sam2 += sam_format(mappings[1].second);
+        } else {
+          // std::cerr << "SECOND CASE" << std::endl;
+          mappings[1].first.flag |= 0x800;
+          // std::cerr << "FLAGGED" << std::endl;
+          sam1 += sam_format(mappings[0].first);
+          sam1 += sam_format(mappings[1].first);
+          sam2 += sam_format(mappings[0].second);
+        }
+        // std::cerr << "SAM END" << std::endl;
+        sam += sam1 + sam2;
+        // std::cerr << "CIRC OUT" << std::endl;
+        continue;
+      }
+    }
+    // std::cerr << "CHECKED OUT" << std::endl;
 
     std::vector<std::pair<mapping_t, mapping_t>> mappings;
     process_pairs(mappings, checked1, reference, paired_reads.first[i], paired_reads.second[i], parameters, clipped1, clipped2);

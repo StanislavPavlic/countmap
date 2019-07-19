@@ -21,7 +21,7 @@ bin_t extract_candidates(const std::vector<minimizer_hit_t>& hits, const uint32_
                          const uint32_t region_size);
 
 paired_checked_t check_pairing(std::pair<bin_t, bin_t>& candidates, const uint32_t insert_size,
-                               const uint32_t read_size);
+                               const uint32_t read_size, const uint32_t ref_size);
 
 region_t find_region(std::vector<minimizer_hit_t>& hits);
 
