@@ -116,7 +116,10 @@ paired_checked_t check_pairing(std::pair<bin_t, bin_t>& candidates, const uint32
                                const uint32_t read_size, const uint32_t ref_size) {
   paired_checked_t checked;
   bool circd = false;
-  minimizer_hit_t flag = {-1, -1, 0};
+  minimizer_hit_t flag;
+  std::get<0>(flag) = -1;
+  std::get<1>(flag) = -1;
+  std::get<2>(flag) = 0;
 
   if (candidates.first.find(0) != candidates.first.end() && candidates.first.find(ref_size / read_size) != candidates.first.end()) {
     bin_t::const_iterator found;
