@@ -36,6 +36,19 @@ void find_minimizer_hits(std::vector<minimizer_hit_t>& fwd, std::vector<minimize
   }
 }
 
+std::pair<std::vector<minimizer_hit_t>, std::vector<minimizer_hit_t>> circular_check(
+    const std::vector<minimizer_hit_t>& hits, const uint32_t region_size, const uint32_t ref_size) {
+  std::vector<minimizer_hit_t> circ_s;
+  for (uint32_t i = 0; i < hits.size() && std::get<1>(hits[i]) < region_size; ++i) {
+    circ_s.push_back(hits[i]);
+  }
+  std::vector<minimizer_hit_t> circ_e;
+  for (uint32_t i = 0; i < hits.size() && std::get<1>(hits[hits.size() - 1 - i]) > ref_size - region_size; ++i) {
+    circ_e.push_back(hits[hits.size() - 1 - i]);
+  }
+  return std::make_pair(circ_s, circ_e);
+}
+
 // Count hits by two neighbouring regions, e.g. [0,1], [100, 101], [101, 102], ...
 // Args: hits        - list of minimizer hits
 //       threshold   - acceptance limit for hit counts in regions

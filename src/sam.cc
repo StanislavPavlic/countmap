@@ -1,3 +1,4 @@
+#include <iostream>
 #include <cstdlib>
 #include <cstdint>
 #include <cstring>
@@ -135,20 +136,36 @@ mapping_t single_mapping(const std::string& qname, const std::string& query,
   uint32_t end_off = std::get<2>(region.first)
                       ? std::get<0>(region.first)
                       : query.size() - std::get<0>(region.second);
+  uint32_t ref_off = start_off;                      
   
   std::string preclip, postclip;
   update_offset(clipped.first, end_off, start_off, std::get<2>(region.first));
   update_offset(clipped.second, start_off, end_off, std::get<2>(region.first));
-  
-  uint32_t len = (query.size() - end_off) - start_off;
 
-  std::tuple<uint32_t, int32_t, std::string> cigar = ksw2(ref.c_str() + std::get<1>(region.first) + start_off, len, 
+  ref_off = start_off - ref_off;
+  if (start_off) {
+    preclip = std::to_string(start_off) + "S";
+  }
+  if (end_off) {
+    postclip = std::to_string(end_off) + "S";
+  }
+
+  uint32_t len = (query.size() - end_off) - start_off;
+  // if (qname == "EAS20_8_6_4_371_457/1" && (start_off > 10 || end_off > 10)) {
+  //   std::cerr << qname << std::endl;
+  //   std::cerr << "Ref start " << std::get<1>(region.first) + ref_off << "; " << len << std::endl;
+  //   std::cerr << "Que start " << start_off << "; " << len << std::endl;
+  // }
+
+  std::tuple<uint32_t, int32_t, std::string> cigar = ksw2(ref.c_str() + std::get<1>(region.first) + ref_off, len, 
                                                           query.c_str() + start_off, len, 
                                                           parameters);
-
+  // if (start_off > 10 || end_off > 10) {
+  //   std::cerr << "KSW2'D" << std::endl; 
+  // }
   mapping_t m;
 
-  m.qname = qname.substr(0, qname.find('/', 0));
+  m.qname = qname;
   m.flag = std::get<2>(region.first) ? 0x10 : 0x0;
   m.rname = rname;
   m.pos = std::get<1>(region.first) + 1;
@@ -200,10 +217,14 @@ std::pair<mapping_t, mapping_t> pair_mapping(const std::string& qname,
   uint32_t end_off2 = std::get<2>(region_pair.second.first)
                       ? std::get<0>(region_pair.second.first)
                       : query2.size() - std::get<0>(region_pair.second.second);
+  uint32_t ref_off1 = start_off1;
+  uint32_t ref_off2 = start_off2;                      
   update_offset(clipped1.first, end_off1, start_off1, std::get<2>(region_pair.first.first));
   update_offset(clipped1.second, start_off1, end_off1, std::get<2>(region_pair.first.first));
   update_offset(clipped2.first, end_off2, start_off2, std::get<2>(region_pair.second.first));
   update_offset(clipped2.second, start_off2, end_off2, std::get<2>(region_pair.second.first));
+  ref_off1 = start_off1 - ref_off1;
+  ref_off2 = start_off2 - ref_off2;
   
   std::string preclip1, postclip1, preclip2, postclip2;
   if (start_off1) {
@@ -222,10 +243,10 @@ std::pair<mapping_t, mapping_t> pair_mapping(const std::string& qname,
   uint32_t len1 = (query1.size() - end_off1) - start_off1;
   uint32_t len2 = (query2.size() - end_off2) - start_off2;
 
-  std::tuple<uint32_t, int32_t, std::string> cigar1 = ksw2(ref.c_str() + std::get<1>(region_pair.first.first) + start_off1, len1, 
+  std::tuple<uint32_t, int32_t, std::string> cigar1 = ksw2(ref.c_str() + std::get<1>(region_pair.first.first) + ref_off1, len1, 
                                                            query1.c_str() + start_off1, len1, 
                                                            parameters);
-  std::tuple<uint32_t, int32_t, std::string> cigar2 = ksw2(ref.c_str() + std::get<1>(region_pair.second.first) + start_off2, len2, 
+  std::tuple<uint32_t, int32_t, std::string> cigar2 = ksw2(ref.c_str() + std::get<1>(region_pair.second.first) + ref_off2, len2, 
                                                            query2.c_str() + start_off2, len2, 
                                                            parameters);
 

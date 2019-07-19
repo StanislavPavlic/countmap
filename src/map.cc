@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
+#include <iostream>
 
 #include "map.hpp"
 #include "mapping.hpp"
@@ -47,6 +48,7 @@ std::vector<mapping_t> process_single(const std::unordered_map<uint64_t, index_p
                                       const std::vector<minimizer_t>& t_minimizers, const std::unique_ptr<fastaq::FastAQ>& reference, 
                                       const std::unique_ptr<fastaq::FastAQ>& read, const mapping_params_t& parameters) {
   std::vector<mapping_t> mappings;
+  std::vector<mapping_t> mappings_c;
 
   std::pair<int32_t, int32_t> clipped = clip(read->sequence, parameters.k, parameters.w);
   if (clipped.first < 0) {
@@ -70,12 +72,95 @@ std::vector<mapping_t> process_single(const std::unordered_map<uint64_t, index_p
 
   std::pair<bin_t, bin_t> candidates(extract_candidates(hits.first, parameters.threshold, read->sequence.size()),
                                      extract_candidates(hits.second, parameters.threshold, read->sequence.size()));
-
-  if (candidates.first.size() == 0 && candidates.second.size() == 0) {
-    return mappings;
-  }
+  std::pair<std::vector<minimizer_hit_t>, std::vector<minimizer_hit_t>> circ1 = circular_check(
+      hits.first, read->sequence.size(), reference->sequence.size());
+  std::pair<std::vector<minimizer_hit_t>, std::vector<minimizer_hit_t>> circ2 = circular_check(
+      hits.second, read->sequence.size(), reference->sequence.size());
 
   std::unordered_set<uint32_t> processed;
+  if (circ1.first.size() > 0 && circ1.second.size() > 0 && circ1.first.size() + circ1.second.size() >= parameters.threshold) {
+    // std::cerr << "HELLO?1" << std::endl;
+    mapping_t m_s, m_e;
+    region_t reg_s = find_region(circ1.first);
+    region_t reg_e = find_region(circ1.second);
+    
+    std::get<0>(reg_s.first) -= std::get<1>(reg_s.first);
+    std::get<1>(reg_s.first) = 0;
+    std::get<1>(reg_s.second) += read->sequence.size() - std::get<0>(reg_s.second);
+    std::get<0>(reg_s.second) = read->sequence.size();
+
+    std::get<1>(reg_e.first) -= std::get<0>(reg_e.first);
+    std::get<0>(reg_e.first) = 0;
+    std::get<0>(reg_e.second) += reference->sequence.size() - std::get<1>(reg_e.second);
+    std::get<1>(reg_e.second) = reference->sequence.size(); 
+
+    // std::cerr << "REG_S (" << std::get<0>(reg_s.first) << ", " << std::get<1>(reg_s.first) << ")-(" << std::get<0>(reg_s.second) << " " << std::get<1>(reg_s.second) << ") | " << std::get<2>(reg_s.first) << std::endl;
+    // std::cerr << "REG_E (" << std::get<0>(reg_e.first) << ", " << std::get<1>(reg_e.first) << ")-(" << std::get<0>(reg_e.second) << " " << std::get<1>(reg_e.second) << ") | " << std::get<2>(reg_e.first) << std::endl;
+
+    processed.insert(std::get<1>(reg_s.first));
+    processed.insert(std::get<1>(reg_e.first));
+
+    m_s = single_mapping(read->name, read->sequence, read->quality,
+                         reference->name, reference->sequence, reg_s, 
+                         parameters, clipped);
+    m_e = single_mapping(read->name, read->sequence, read->quality,
+                         reference->name, reference->sequence, reg_e, 
+                         parameters, clipped);
+    // std::cerr << "MAPPED" << std::endl;
+    mappings_c.push_back(m_s);
+    m_e.flag |= 0x800;
+    mappings_c.push_back(m_e);
+    // std::cerr << "HELLO?1 OUT" << std::endl;
+  }
+  if (circ2.first.size() > 0 && circ2.second.size() > 0 && circ2.first.size() + circ2.second.size() >= parameters.threshold) {
+    // std::cerr << "HELLO?2" << std::endl;
+    mapping_t m_s, m_e;
+    region_t reg_s = find_region(circ2.first);
+    region_t reg_e = find_region(circ2.second);
+    
+    // if (read->name == "EAS20_8_6_4_371_457/1") {
+    //   std::cerr << "PRE" << std::endl;
+    //   std::cerr << "REG_S (" << std::get<0>(reg_s.first) << ", " << std::get<1>(reg_s.first) << ")-(" << std::get<0>(reg_s.second) << " " << std::get<1>(reg_s.second) << ") | " << std::get<2>(reg_s.first) << std::endl;
+    //   std::cerr << "REG_E (" << std::get<0>(reg_e.first) << ", " << std::get<1>(reg_e.first) << ")-(" << std::get<0>(reg_e.second) << " " << std::get<1>(reg_e.second) << ") | " << std::get<2>(reg_e.first) << std::endl;
+    // }
+
+    std::get<0>(reg_s.second) += std::get<1>(reg_s.first) + parameters.k;
+    std::get<1>(reg_s.first) = 0;
+    std::get<1>(reg_s.second) += std::get<0>(reg_s.first) + parameters.k;
+    std::get<0>(reg_s.first) = 0;
+
+    std::get<1>(reg_e.first) -= read->sequence.size() - std::get<0>(reg_e.second) - parameters.k;
+    std::get<0>(reg_e.second) = read->sequence.size();
+    std::get<0>(reg_e.first) -= reference->sequence.size() - std::get<1>(reg_e.second) - parameters.k;
+    std::get<1>(reg_e.second) = reference->sequence.size();
+
+    // if (read->name == "EAS20_8_6_4_371_457/1") {
+    //   std::cerr << "REG_S (" << std::get<0>(reg_s.first) << ", " << std::get<1>(reg_s.first) << ")-(" << std::get<0>(reg_s.second) << " " << std::get<1>(reg_s.second) << ") | " << std::get<2>(reg_s.first) << std::endl;
+    //   std::cerr << "REG_E (" << std::get<0>(reg_e.first) << ", " << std::get<1>(reg_e.first) << ")-(" << std::get<0>(reg_e.second) << " " << std::get<1>(reg_e.second) << ") | " << std::get<2>(reg_e.first) << std::endl;
+    // }
+
+    processed.insert(std::get<1>(reg_s.first));
+    processed.insert(std::get<1>(reg_e.first));
+
+    std::string rc = reverse_complement(read->sequence, 0, read->sequence.size());
+    std::string rq = std::string(read->quality.rbegin(), read->quality.rend());
+
+    m_s = single_mapping(read->name, rc, rq,
+                         reference->name, reference->sequence, reg_s, 
+                         parameters, clipped);
+    m_e = single_mapping(read->name, rc, rq,
+                         reference->name, reference->sequence, reg_e, 
+                         parameters, clipped);
+    mappings_c.push_back(m_s);
+    m_e.flag |= 0x800;
+    mappings_c.push_back(m_e);
+  }
+
+  if (candidates.first.size() == 0 && candidates.second.size() == 0) {
+    return mappings_c;
+  }
+
+  // std::cerr << "CAND IN" << std::endl;
   for (auto& bin : candidates.first) {
     region_t reg = find_region(bin.second);
     expand_region(reg, read->sequence.size(), parameters.k, reference->sequence.size());
@@ -105,21 +190,30 @@ std::vector<mapping_t> process_single(const std::unordered_map<uint64_t, index_p
                                          reference->name, reference->sequence, reg, 
                                          parameters, clipped));
   }
+  // std::cerr << "CAND OUT" << std::endl;
 
   std::sort(mappings.begin(), mappings.end(), 
             [] (const mapping_t& a, const mapping_t& b) {
               return a.as > b.as;
             }
   );
+  std::sort(mappings_c.begin(), mappings_c.end(), 
+            [] (const mapping_t& a, const mapping_t& b) {
+              return a.as > b.as;
+            }
+  );
 
+  // std::cerr << "FORMAT IN" << std::endl;
   if (parameters.all) {
     for (uint32_t i = 0; i < mappings.size(); ++i) {
       mappings[i].mapq /= mappings.size();
-      if (i) {
+      if (i && !(mappings[i].flag & 0x800)) {
         mappings[i].flag |= 0x100;
         mappings[i].mapq = 0;
       }
     }
+  } else if (mappings_c.size() && (mappings.size() == 0 || (mappings_c[0].as - mappings[0].as))) {
+    return mappings_c;
   } else {
     uint32_t i = 1;
     int32_t as = mappings[0].as;
@@ -129,6 +223,7 @@ std::vector<mapping_t> process_single(const std::unordered_map<uint64_t, index_p
     mappings[0].mapq /= mappings.size();
     mappings.erase(mappings.begin() + 1, mappings.end());
   }
+  // std::cerr << "FORMAT OUT" << std::endl;
 
   return mappings;
 }
