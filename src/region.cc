@@ -187,16 +187,18 @@ paired_checked_t check_pairing(std::pair<bin_t, bin_t>& candidates, const uint32
     bin_t::const_iterator found;
 
     if (!std::get<2>(bin.second[0])) {
-      if ((found = candidates.second.find(bin.first + ((insert_size - read_size) / read_size))) != candidates.second.end()
-          || (found = candidates.second.find(bin.first + ((insert_size - read_size) / read_size) - 1)) != candidates.second.end()
-          || (found = candidates.second.find(bin.first + ((insert_size - read_size) / read_size) + 1)) != candidates.second.end()) {
+      uint32_t pos = (bin.first + ((insert_size - read_size) / read_size)) % (ref_size / read_size);
+      if ((found = candidates.second.find(pos)) != candidates.second.end()
+          || (found = candidates.second.find((signed)(pos - 1) >= 0 ? pos - 1 : (ref_size / read_size) - (signed)(pos - 1))) != candidates.second.end()
+          || (found = candidates.second.find((pos + 1) % (ref_size / read_size))) != candidates.second.end()) {
         checked.first.emplace_back(bin.second.begin(), bin.second.end());
         checked.second.emplace_back(found->second.begin(), found->second.end());
       }
     } else {
-      if ((found = candidates.second.find(bin.first - ((insert_size - read_size) / read_size))) != candidates.second.end()
-          || (found = candidates.second.find(bin.first - ((insert_size - read_size) / read_size) - 1)) != candidates.second.end()
-          || (found = candidates.second.find(bin.first - ((insert_size - read_size) / read_size) + 1)) != candidates.second.end()) {
+      uint32_t pos = (signed)(bin.first - ((insert_size - read_size) / read_size)) >= 0 ? bin.first - ((insert_size - read_size) / read_size) : (ref_size / read_size) - (bin.first - ((insert_size - read_size) / read_size));
+      if ((found = candidates.second.find(pos)) != candidates.second.end()
+          || (found = candidates.second.find((signed)(pos - 1) >= 0 ? pos - 1 : (ref_size / read_size) - (signed)(pos - 1))) != candidates.second.end()
+          || (found = candidates.second.find((pos + 1) % (ref_size / read_size))) != candidates.second.end()) {
         checked.first.emplace_back(bin.second.begin(), bin.second.end());
         checked.second.emplace_back(found->second.begin(), found->second.end());
       }
