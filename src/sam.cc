@@ -169,18 +169,10 @@ mapping_t single_mapping(const std::string& qname, const std::string& query,
   }
 
   uint32_t len = (query.size() - end_off) - start_off;
-  // if (qname == "EAS20_8_6_4_371_457/1" && (start_off > 10 || end_off > 10)) {
-  //   std::cerr << qname << std::endl;
-  //   std::cerr << "Ref start " << std::get<1>(region.first) + ref_off << "; " << len << std::endl;
-  //   std::cerr << "Que start " << start_off << "; " << len << std::endl;
-  // }
 
   std::tuple<uint32_t, int32_t, std::string> cigar = ksw2(ref.c_str() + std::get<1>(region.first) + ref_off, len, 
                                                           query.c_str() + start_off, len, 
                                                           parameters);
-  // if (start_off > 10 || end_off > 10) {
-  //   std::cerr << "KSW2'D" << std::endl; 
-  // }
   mapping_t m;
 
   m.qname = qname;
@@ -261,21 +253,16 @@ std::pair<mapping_t, mapping_t> pair_mapping(const std::string& qname,
   uint32_t len1 = (query1.size() - end_off1) - start_off1;
   uint32_t len2 = (query2.size() - end_off2) - start_off2;
 
-  // std::cerr << "REF START " << std::get<1>(region_pair.first.first) + ref_off1 << ", " << len1 << std::endl;
-  // std::cerr << "QUE START " << start_off1 << ", " << len1 << std::endl;
-  // std::cerr << "REF START " << std::get<1>(region_pair.second.first) + ref_off2 << ", " << len2 << std::endl;
-  // std::cerr << "QUE START " << start_off2 << ", " << len2 << std::endl;
-
-  auto time_start = std::chrono::steady_clock::now();
+  // auto time_start = std::chrono::steady_clock::now();
   std::tuple<uint32_t, int32_t, std::string> cigar1 = ksw2(ref.c_str() + std::get<1>(region_pair.first.first) + ref_off1, len1, 
                                                            query1.c_str() + start_off1, len1, 
                                                            parameters);
   std::tuple<uint32_t, int32_t, std::string> cigar2 = ksw2(ref.c_str() + std::get<1>(region_pair.second.first) + ref_off2, len2, 
                                                            query2.c_str() + start_off2, len2, 
                                                            parameters);
-  auto time_end = std::chrono::steady_clock::now();
-  auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-  ksw2_time += time_interval.count();
+  // auto time_end = std::chrono::steady_clock::now();
+  // auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+  // ksw2_time += time_interval.count();
 
   int prop_aligned = (float)abs(abs(insert_size) - (int32_t)parameters.insert_size) < 5 * parameters.sd ? 0x2 : 0x0;
 
@@ -304,13 +291,8 @@ std::pair<mapping_t, mapping_t> pair_mapping(const std::string& qname,
   m2.cigar = preclip2 + std::get<2>(cigar2) + postclip2;
   m2.pnext = std::get<1>(region_pair.first.first) + 1;
   m2.tlen = -insert_size;
-  // if (std::get<0>(region_pair.second.first) > 0 || std::get<0>(region_pair.second.second) < query2.size()) {
-  //   m2.seq = query2.substr(std::get<0>(region_pair.second.first), std::get<0>(region_pair.second.second) - std::get<0>(region_pair.second.first));
-  //   m2.qual = qual2.substr(std::get<0>(region_pair.second.first), std::get<0>(region_pair.second.second) - std::get<0>(region_pair.second.first));
-  // } else {
-    m2.seq = query2;
-    m2.qual = qual2;
-  // }
+  m2.seq = query2;
+  m2.qual = qual2;
   m2.nm = query2.size() - std::get<0>(cigar2) - start_off2 - end_off2;
   m2.as = std::get<1>(cigar2);
 

@@ -31,6 +31,24 @@ extern double process_time;
 extern double sam_time;
 extern double unmapped_time;
 
+namespace std
+{
+    template <>
+    struct hash<std::pair<std::pair<std::tuple<uint32_t, uint32_t, bool>, std::tuple<uint32_t, uint32_t, bool>>, std::pair<std::tuple<uint32_t, uint32_t, bool>, std::tuple<uint32_t, uint32_t, bool>>>>
+    {
+        size_t operator()( const std::pair<std::pair<std::tuple<uint32_t, uint32_t, bool>, std::tuple<uint32_t, uint32_t, bool>>, std::pair<std::tuple<uint32_t, uint32_t, bool>, std::tuple<uint32_t, uint32_t, bool>>>& k ) const
+        {
+            // Compute individual hash values for first, second and third
+            // http://stackoverflow.com/a/1646913/126995
+            size_t res = 17;
+            res = res * 31 + hash<uint32_t>()( std::get<1>(k.first.first) );
+            res = res * 31 + hash<uint32_t>()( std::get<1>(k.second.first) );
+            return res;
+        }
+    };
+}
+
+
 // Clip ends of sequence that contain multiple Ns
 // Args: seq - sequence to be clipped
 //       k   - k-mer length
@@ -94,7 +112,6 @@ std::vector<mapping_t> process_single(const std::unordered_map<uint64_t, index_p
 
   std::unordered_set<uint32_t> processed;
   if (circ1.first.size() > 0 && circ1.second.size() > 0 && circ1.first.size() + circ1.second.size() >= parameters.threshold) {
-    // std::cerr << "HELLO?1" << std::endl;
     mapping_t m_s, m_e;
     region_t reg_s = find_region(circ1.first);
     region_t reg_e = find_region(circ1.second);
@@ -109,9 +126,6 @@ std::vector<mapping_t> process_single(const std::unordered_map<uint64_t, index_p
     std::get<0>(reg_e.second) += reference->sequence.size() - std::get<1>(reg_e.second);
     std::get<1>(reg_e.second) = reference->sequence.size(); 
 
-    // std::cerr << "REG_S (" << std::get<0>(reg_s.first) << ", " << std::get<1>(reg_s.first) << ")-(" << std::get<0>(reg_s.second) << " " << std::get<1>(reg_s.second) << ") | " << std::get<2>(reg_s.first) << std::endl;
-    // std::cerr << "REG_E (" << std::get<0>(reg_e.first) << ", " << std::get<1>(reg_e.first) << ")-(" << std::get<0>(reg_e.second) << " " << std::get<1>(reg_e.second) << ") | " << std::get<2>(reg_e.first) << std::endl;
-
     processed.insert(std::get<1>(reg_s.first));
     processed.insert(std::get<1>(reg_e.first));
 
@@ -121,23 +135,14 @@ std::vector<mapping_t> process_single(const std::unordered_map<uint64_t, index_p
     m_e = single_mapping(read->name, read->sequence, read->quality,
                          reference->name, reference->sequence, reg_e, 
                          parameters, clipped);
-    // std::cerr << "MAPPED" << std::endl;
     mappings_c.push_back(m_s);
     m_e.flag |= 0x800;
     mappings_c.push_back(m_e);
-    // std::cerr << "HELLO?1 OUT" << std::endl;
   }
   if (circ2.first.size() > 0 && circ2.second.size() > 0 && circ2.first.size() + circ2.second.size() >= parameters.threshold) {
-    // std::cerr << "HELLO?2" << std::endl;
     mapping_t m_s, m_e;
     region_t reg_s = find_region(circ2.first);
     region_t reg_e = find_region(circ2.second);
-    
-    // if (read->name == "EAS20_8_6_4_371_457/1") {
-    //   std::cerr << "PRE" << std::endl;
-    //   std::cerr << "REG_S (" << std::get<0>(reg_s.first) << ", " << std::get<1>(reg_s.first) << ")-(" << std::get<0>(reg_s.second) << " " << std::get<1>(reg_s.second) << ") | " << std::get<2>(reg_s.first) << std::endl;
-    //   std::cerr << "REG_E (" << std::get<0>(reg_e.first) << ", " << std::get<1>(reg_e.first) << ")-(" << std::get<0>(reg_e.second) << " " << std::get<1>(reg_e.second) << ") | " << std::get<2>(reg_e.first) << std::endl;
-    // }
 
     std::get<0>(reg_s.second) += std::get<1>(reg_s.first) + parameters.k;
     std::get<1>(reg_s.first) = 0;
@@ -148,11 +153,6 @@ std::vector<mapping_t> process_single(const std::unordered_map<uint64_t, index_p
     std::get<0>(reg_e.second) = read->sequence.size();
     std::get<0>(reg_e.first) -= reference->sequence.size() - std::get<1>(reg_e.second) - parameters.k;
     std::get<1>(reg_e.second) = reference->sequence.size();
-
-    // if (read->name == "EAS20_8_6_4_371_457/1") {
-    //   std::cerr << "REG_S (" << std::get<0>(reg_s.first) << ", " << std::get<1>(reg_s.first) << ")-(" << std::get<0>(reg_s.second) << " " << std::get<1>(reg_s.second) << ") | " << std::get<2>(reg_s.first) << std::endl;
-    //   std::cerr << "REG_E (" << std::get<0>(reg_e.first) << ", " << std::get<1>(reg_e.first) << ")-(" << std::get<0>(reg_e.second) << " " << std::get<1>(reg_e.second) << ") | " << std::get<2>(reg_e.first) << std::endl;
-    // }
 
     processed.insert(std::get<1>(reg_s.first));
     processed.insert(std::get<1>(reg_e.first));
@@ -175,7 +175,6 @@ std::vector<mapping_t> process_single(const std::unordered_map<uint64_t, index_p
     return mappings_c;
   }
 
-  // std::cerr << "CAND IN" << std::endl;
   for (auto& bin : candidates.first) {
     region_t reg = find_region(bin.second);
     expand_region(reg, read->sequence.size(), parameters.k, reference->sequence.size());
@@ -205,7 +204,6 @@ std::vector<mapping_t> process_single(const std::unordered_map<uint64_t, index_p
                                          reference->name, reference->sequence, reg, 
                                          parameters, clipped));
   }
-  // std::cerr << "CAND OUT" << std::endl;
 
   std::sort(mappings.begin(), mappings.end(), 
             [] (const mapping_t& a, const mapping_t& b) {
@@ -218,7 +216,6 @@ std::vector<mapping_t> process_single(const std::unordered_map<uint64_t, index_p
             }
   );
 
-  // std::cerr << "FORMAT IN" << std::endl;
   if (parameters.all) {
     for (uint32_t i = 0; i < mappings.size(); ++i) {
       mappings[i].mapq /= mappings.size();
@@ -238,7 +235,6 @@ std::vector<mapping_t> process_single(const std::unordered_map<uint64_t, index_p
     mappings[0].mapq /= mappings.size();
     mappings.erase(mappings.begin() + 1, mappings.end());
   }
-  // std::cerr << "FORMAT OUT" << std::endl;
 
   return mappings;
 }
@@ -257,35 +253,29 @@ void process_pairs(std::vector<std::pair<mapping_t, mapping_t>>& mappings,
     const mapping_params_t& parameters, 
     const std::pair<int32_t, int32_t>& clipped1, 
     const std::pair<int32_t, int32_t>& clipped2) {
-  std::unordered_set<uint32_t> processed;
+  std::unordered_set<std::pair<region_t, region_t>> processed;
 
   for (uint32_t j = 0; j < checked.first.size(); ++j) {
-    auto time_start = std::chrono::steady_clock::now();
+    // auto time_start = std::chrono::steady_clock::now();
     std::pair<region_t, region_t> region_pair(find_region(checked.first[j]),
                                               find_region(checked.second[j]));
-    auto time_end = std::chrono::steady_clock::now();
-    auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    region_time += time_interval.count();
+    // auto time_end = std::chrono::steady_clock::now();
+    // auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    // region_time += time_interval.count();
 
-    // std::cerr << "(" << std::get<0>(region_pair.first.first) << ", " << std::get<1>(region_pair.first.first) << ")-(" << std::get<0>(region_pair.first.second) << ", " << std::get<1>(region_pair.first.second) << ") | " << std::get<2>(region_pair.first.first) << std::endl;
-    // std::cerr << "(" << std::get<0>(region_pair.second.first) << ", " << std::get<1>(region_pair.second.first) << ")-(" << std::get<0>(region_pair.second.second) << ", " << std::get<1>(region_pair.second.second) << ") | " << std::get<2>(region_pair.second.first) << std::endl;
-
-    time_start = std::chrono::steady_clock::now();
+    // time_start = std::chrono::steady_clock::now();
     expand_region(region_pair.first, first->sequence.size(), 
                   parameters.k, reference->sequence.size());
     expand_region(region_pair.second, second->sequence.size(), 
                   parameters.k, reference->sequence.size());
-    time_end = std::chrono::steady_clock::now();
-    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    expand_time += time_interval.count();
+    // time_end = std::chrono::steady_clock::now();
+    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    // expand_time += time_interval.count();
 
-    // std::cerr << "(" << std::get<0>(region_pair.first.first) << ", " << std::get<1>(region_pair.first.first) << ")-(" << std::get<0>(region_pair.first.second) << ", " << std::get<1>(region_pair.first.second) << ") | " << std::get<2>(region_pair.first.first) << std::endl;
-    // std::cerr << "(" << std::get<0>(region_pair.second.first) << ", " << std::get<1>(region_pair.second.first) << ")-(" << std::get<0>(region_pair.second.second) << ", " << std::get<1>(region_pair.second.second) << ") | " << std::get<2>(region_pair.second.first) << std::endl;
+    if (processed.find(region_pair) != processed.end()) continue;
+    processed.insert(region_pair);
 
-    // if (processed.find(std::get<1>(region_pair.first.first)) != processed.end()) continue;
-    // processed.insert(std::get<1>(region_pair.first.first));
-
-    time_start = std::chrono::steady_clock::now();
+    // time_start = std::chrono::steady_clock::now();
     std::string rc;
     std::string rq;
 
@@ -301,9 +291,9 @@ void process_pairs(std::vector<std::pair<mapping_t, mapping_t>>& mappings,
     std::string* quality2 = std::get<2>(region_pair.second.first)
                             ? &(rq = std::string(second->quality.rbegin(), second->quality.rend()))
                             : &(second->quality);
-    time_end = std::chrono::steady_clock::now();
-    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    revcomp_time += time_interval.count();
+    // time_end = std::chrono::steady_clock::now();
+    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    // revcomp_time += time_interval.count();
 
     mappings.emplace_back(
       pair_mapping(
@@ -457,25 +447,25 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
   std::string sam;
 
   for (uint32_t i = t_start; i < t_end; ++i) {
-    auto time_start = std::chrono::steady_clock::now();
+    // auto time_start = std::chrono::steady_clock::now();
     std::pair<int32_t, int32_t> clipped1 = clip(paired_reads.first[i]->sequence, parameters.k, parameters.w);
     std::pair<int32_t, int32_t> clipped2 = clip(paired_reads.second[i]->sequence, parameters.k, parameters.w);
-    auto time_end = std::chrono::steady_clock::now();
-    auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    clip_time += time_interval.count();
+    // auto time_end = std::chrono::steady_clock::now();
+    // auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    // clip_time += time_interval.count();
     if (clipped1.first < 0 || clipped2.first < 0) {
-      time_start = std::chrono::steady_clock::now();
+      // time_start = std::chrono::steady_clock::now();
       sam += unmapped_sam(paired_reads.first[i]->name, paired_reads.first[i]->sequence,
                           paired_reads.first[i]->quality, 1, 1, 0)
              + unmapped_sam(paired_reads.second[i]->name, paired_reads.second[i]->sequence, 
                             paired_reads.second[i]->quality, 1, 0, 1);
-      time_end = std::chrono::steady_clock::now();
-      time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-      unmapped_time += time_interval.count();
+      // time_end = std::chrono::steady_clock::now();
+      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      // unmapped_time += time_interval.count();
       continue;
     }
 
-    time_start = std::chrono::steady_clock::now();
+    // time_start = std::chrono::steady_clock::now();
     paired_minimizers_t p_minimizers(brown::minimizers(paired_reads.first[i]->sequence.c_str() + clipped1.first,
                                                        paired_reads.first[i]->sequence.size() - clipped1.first - clipped1.second,
                                                        parameters.k, parameters.w),
@@ -492,206 +482,128 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
         std::get<1>(min) += clipped2.first;
       }
     }
-    time_end = std::chrono::steady_clock::now();
-    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    minimizer_time += time_interval.count();
+    // time_end = std::chrono::steady_clock::now();
+    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    // minimizer_time += time_interval.count();
 
-    time_start = std::chrono::steady_clock::now();
+    // time_start = std::chrono::steady_clock::now();
     split_hits_t hits1;
     split_hits_t hits2;
     find_minimizer_hits(hits1.first, hits1.second, ref_index, t_minimizers, p_minimizers.first);
     find_minimizer_hits(hits2.first, hits2.second, ref_index, t_minimizers, p_minimizers.second);
-    time_end = std::chrono::steady_clock::now();
-    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    hits_time += time_interval.count();
+    // time_end = std::chrono::steady_clock::now();
+    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    // hits_time += time_interval.count();
 
-    time_start = std::chrono::steady_clock::now();
+    // time_start = std::chrono::steady_clock::now();
     radixsort(hits1.first);
     radixsort(hits1.second);
     radixsort(hits2.first);
     radixsort(hits2.second);
-    time_end = std::chrono::steady_clock::now();
-    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    radix_time += time_interval.count();
+    // time_end = std::chrono::steady_clock::now();
+    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    // radix_time += time_interval.count();
 
-    time_start = std::chrono::steady_clock::now();
+    // time_start = std::chrono::steady_clock::now();
     std::pair<bin_t, bin_t> candidates1(
         extract_candidates(hits1.first, parameters.threshold, paired_reads.first[i]->sequence.size()),
         extract_candidates(hits2.second, parameters.threshold, paired_reads.second[i]->sequence.size()));
     std::pair<bin_t, bin_t> candidates2(
         extract_candidates(hits1.second, parameters.threshold, paired_reads.first[i]->sequence.size()),
         extract_candidates(hits2.first, parameters.threshold, paired_reads.second[i]->sequence.size()));
-    time_end = std::chrono::steady_clock::now();
-    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    candidates_time += time_interval.count();
+    // time_end = std::chrono::steady_clock::now();
+    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    // candidates_time += time_interval.count();
 
-    time_start = std::chrono::steady_clock::now();
+    // time_start = std::chrono::steady_clock::now();
     paired_checked_t checked1 = check_pairing(candidates1, parameters.insert_size,
                                               paired_reads.second[i]->sequence.size(), reference->sequence.size());
     paired_checked_t checked2 = check_pairing(candidates2, parameters.insert_size,
                                               paired_reads.first[i]->sequence.size(), reference->sequence.size());
 
-    // std::cerr << "CHECKED IN" << std::endl;
     if (checked1.first.size() == 2) {
-      // std::cerr << std::get<1>(checked1.first[0][0]) << ", " << std::get<1>(checked1.second[0][0]) << ", " << std::get<1>(checked1.first[1][0]) << ", " << std::get<1>(checked1.second[1][0]) << std::endl;
       if (std::get<1>(checked1.first[1][0]) == (uint32_t)-1 || std::get<1>(checked1.second[1][0]) == (uint32_t)-1) {
-        // std::cerr << "CIRC IN" << std::endl;
         if (std::get<1>(checked1.first[1][0]) == (uint32_t)-1) {
           checked1.first[1] = checked1.first[0];
         } else {
           checked1.second[1] = checked1.second[0];
         }
-        // std::cerr << std::get<1>(checked1.first[0][0]) << ", " << std::get<1>(checked1.second[0][0]) << ", " << std::get<1>(checked1.first[1][0]) << ", " << std::get<1>(checked1.second[1][0]) << std::endl;
         std::vector<std::pair<mapping_t, mapping_t>> mappings;
         process_pairs(mappings, checked1, reference, paired_reads.first[i], paired_reads.second[i], parameters, clipped1, clipped2);
-        // std::sort(mappings.begin(), mappings.end(), 
-        //           [] (const std::pair<mapping_t, mapping_t>& a, 
-        //               const std::pair<mapping_t, mapping_t>& b) {
-        //             return a.first.mapq + a.second.mapq > b.first.mapq + b.second.mapq;
-        //           }
-        // );
-        // std::cerr << "SAM START" << std::endl;
+        std::sort(mappings.begin(), mappings.end(), 
+                  [] (const std::pair<mapping_t, mapping_t>& a, 
+                      const std::pair<mapping_t, mapping_t>& b) {
+                    return a.first.mapq + a.second.mapq > b.first.mapq + b.second.mapq;
+                  }
+        );
         std::string sam1, sam2;
-        // std::cerr << mappings[0].first.pos << ", " << mappings[0].second.pos << ", " << mappings[1].first.pos << ", " << mappings[1].second.pos << std::endl;
         if (mappings[0].first.pos == mappings[1].first.pos) {
-          // std::cerr << "FIRST CASE" << std::endl;
           mappings[1].second.flag |= 0x800;
           sam1 += sam_format(mappings[0].first);
           sam2 += sam_format(mappings[0].second);
           sam2 += sam_format(mappings[1].second);
         } else {
-          // std::cerr << "SECOND CASE" << std::endl;
           mappings[1].first.flag |= 0x800;
-          // std::cerr << "FLAGGED" << std::endl;
           sam1 += sam_format(mappings[0].first);
           sam1 += sam_format(mappings[1].first);
           sam2 += sam_format(mappings[0].second);
         }
-        // std::cerr << "SAM END" << std::endl;
         sam += sam1 + sam2;
-        // std::cerr << "CIRC OUT" << std::endl;
         continue;
       }
-
-      // if (std::get<1>(checked1.first[0][0]) == std::get<1>(checked1.first[1][0])) {
-      //   region_t reg = find_region(checked1.first[0]);
-      //   region_t reg_s = find_region(checked1.second[0]);
-      //   region_t reg_e = find_region(checked1.second[1]);
-
-      //   if (std::get<2>(reg.first)) {
-      //     std::get<0>(reg_s.first) -= std::get<1>(reg_s.first);
-      //     std::get<1>(reg_s.first) = 0;
-      //     std::get<1>(reg_s.second) += read->sequence.size() - std::get<0>(reg_s.second);
-      //     std::get<0>(reg_s.second) = read->sequence.size();
-
-      //     std::get<1>(reg_e.first) -= std::get<0>(reg_e.first);
-      //     std::get<0>(reg_e.first) = 0;
-      //     std::get<0>(reg_e.second) += reference->sequence.size() - std::get<1>(reg_e.second);
-      //     std::get<1>(reg_e.second) = reference->sequence.size(); 
-      //   } else {
-      //     std::get<0>(reg_s.second) += std::get<1>(reg_s.first) + parameters.k;
-      //     std::get<1>(reg_s.first) = 0;
-      //     std::get<1>(reg_s.second) += std::get<0>(reg_s.first) + parameters.k;
-      //     std::get<0>(reg_s.first) = 0;
-
-      //     std::get<1>(reg_e.first) -= read->sequence.size() - std::get<0>(reg_e.second) - parameters.k;
-      //     std::get<0>(reg_e.second) = read->sequence.size();
-      //     std::get<0>(reg_e.first) -= reference->sequence.size() - std::get<1>(reg_e.second) - parameters.k;
-      //     std::get<1>(reg_e.second) = reference->sequence.size();
-      //   }
-      //   std::vector<std::pair<mapping_t, mapping_t>> mappings;
-
-      // } else if (std::get<1>(checked1.second[0][0]) == std::get<1>(checked1.second[1][0])) {
-      //   region_t reg = find_region(checked1.second[0]);
-      //   region_t reg_s = find_region(checked1.first[0]);
-      //   region_t reg_e = find_region(checked1.first[1]);
-
-      //   if (std::get<2>(reg.first)) {
-      //     std::get<0>(reg_s.first) -= std::get<1>(reg_s.first);
-      //     std::get<1>(reg_s.first) = 0;
-      //     std::get<1>(reg_s.second) += read->sequence.size() - std::get<0>(reg_s.second);
-      //     std::get<0>(reg_s.second) = read->sequence.size();
-
-      //     std::get<1>(reg_e.first) -= std::get<0>(reg_e.first);
-      //     std::get<0>(reg_e.first) = 0;
-      //     std::get<0>(reg_e.second) += reference->sequence.size() - std::get<1>(reg_e.second);
-      //     std::get<1>(reg_e.second) = reference->sequence.size(); 
-      //   } else {
-      //     std::get<0>(reg_s.second) += std::get<1>(reg_s.first) + parameters.k;
-      //     std::get<1>(reg_s.first) = 0;
-      //     std::get<1>(reg_s.second) += std::get<0>(reg_s.first) + parameters.k;
-      //     std::get<0>(reg_s.first) = 0;
-
-      //     std::get<1>(reg_e.first) -= read->sequence.size() - std::get<0>(reg_e.second) - parameters.k;
-      //     std::get<0>(reg_e.second) = read->sequence.size();
-      //     std::get<0>(reg_e.first) -= reference->sequence.size() - std::get<1>(reg_e.second) - parameters.k;
-      //     std::get<1>(reg_e.second) = reference->sequence.size();
-      //   }
-      // }
     }
     if (checked2.first.size() == 2) {
-      // std::cerr << std::get<1>(checked2.first[0][0]) << ", " << std::get<1>(checked2.second[0][0]) << ", " << std::get<1>(checked2.first[1][0]) << ", " << std::get<1>(checked2.second[1][0]) << std::endl;
       if (std::get<1>(checked2.first[1][0]) == (uint32_t)-1 || std::get<1>(checked2.second[1][0]) == (uint32_t)-1) {
-        // std::cerr << "CIRC IN" << std::endl;
         if (std::get<1>(checked2.first[1][0]) == (uint32_t)-1) {
           checked2.first[1] = checked2.first[0];
         } else {
           checked2.second[1] = checked2.second[0];
         }
-        // std::cerr << std::get<1>(checked2.first[0][0]) << ", " << std::get<1>(checked2.second[0][0]) << ", " << std::get<1>(checked2.first[1][0]) << ", " << std::get<1>(checked2.second[1][0]) << std::endl;
         std::vector<std::pair<mapping_t, mapping_t>> mappings;
         process_pairs(mappings, checked2, reference, paired_reads.first[i], paired_reads.second[i], parameters, clipped1, clipped2);
-        // std::sort(mappings.begin(), mappings.end(), 
-        //           [] (const std::pair<mapping_t, mapping_t>& a, 
-        //               const std::pair<mapping_t, mapping_t>& b) {
-        //             return a.first.mapq + a.second.mapq > b.first.mapq + b.second.mapq;
-        //           }
-        // );
-        // std::cerr << "SAM START" << std::endl;
+        std::sort(mappings.begin(), mappings.end(), 
+                  [] (const std::pair<mapping_t, mapping_t>& a, 
+                      const std::pair<mapping_t, mapping_t>& b) {
+                    return a.first.mapq + a.second.mapq > b.first.mapq + b.second.mapq;
+                  }
+        );
         std::string sam1, sam2;
-        // std::cerr << mappings[0].first.pos << ", " << mappings[0].second.pos << ", " << mappings[1].first.pos << ", " << mappings[1].second.pos << std::endl;
         if (mappings[0].first.pos == mappings[1].first.pos) {
-          // std::cerr << "FIRST CASE" << std::endl;
           mappings[1].second.flag |= 0x800;
           sam1 += sam_format(mappings[0].first);
           sam2 += sam_format(mappings[0].second);
           sam2 += sam_format(mappings[1].second);
         } else {
-          // std::cerr << "SECOND CASE" << std::endl;
           mappings[1].first.flag |= 0x800;
-          // std::cerr << "FLAGGED" << std::endl;
           sam1 += sam_format(mappings[0].first);
           sam1 += sam_format(mappings[1].first);
           sam2 += sam_format(mappings[0].second);
         }
-        // std::cerr << "SAM END" << std::endl;
         sam += sam1 + sam2;
-        // std::cerr << "CIRC OUT" << std::endl;
         continue;
       }
     }
-    // std::cerr << "CHECKED OUT" << std::endl;
-    time_end = std::chrono::steady_clock::now();
-    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    check_time += time_interval.count();
+    // time_end = std::chrono::steady_clock::now();
+    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    // check_time += time_interval.count();
 
-    time_start = std::chrono::steady_clock::now();
+    // time_start = std::chrono::steady_clock::now();
     std::vector<std::pair<mapping_t, mapping_t>> mappings;
     process_pairs(mappings, checked1, reference, paired_reads.first[i], paired_reads.second[i], parameters, clipped1, clipped2);
     process_pairs(mappings, checked2, reference, paired_reads.first[i], paired_reads.second[i], parameters, clipped1, clipped2);
-    time_end = std::chrono::steady_clock::now();
-    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    process_time += time_interval.count();
+    // time_end = std::chrono::steady_clock::now();
+    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    // process_time += time_interval.count();
 
     if (mappings.size() == 0) {
-      time_start = std::chrono::steady_clock::now();
+      // time_start = std::chrono::steady_clock::now();
       sam += unmapped_sam(paired_reads.first[i]->name, paired_reads.first[i]->sequence,
                           paired_reads.first[i]->quality, 1, 1, 0)
              + unmapped_sam(paired_reads.second[i]->name, paired_reads.second[i]->sequence, 
                             paired_reads.second[i]->quality, 1, 0, 1);
-      time_end = std::chrono::steady_clock::now();
-      time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-      unmapped_time += time_interval.count();
+      // time_end = std::chrono::steady_clock::now();
+      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      // unmapped_time += time_interval.count();
       continue;
     }
 
@@ -702,7 +614,7 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
               }
     );
 
-    time_start = std::chrono::steady_clock::now();
+    // time_start = std::chrono::steady_clock::now();
     std::string sam1;
     std::string sam2;
 
@@ -736,9 +648,9 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
     }
 
     sam += sam1 + sam2;
-    time_end = std::chrono::steady_clock::now();
-    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    sam_time += time_interval.count();
+    // time_end = std::chrono::steady_clock::now();
+    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    // sam_time += time_interval.count();
   }
 
   return sam;
