@@ -24,6 +24,20 @@
 #include "bioparser/bioparser.hpp"
 #include "thread_pool/thread_pool.hpp"
 
+double clip_time = 0;
+double minimizer_time = 0;
+double hits_time = 0;
+double radix_time = 0;
+double candidates_time = 0;
+double check_time = 0;
+double region_time = 0;
+double expand_time = 0;
+double revcomp_time = 0;
+double ksw2_time = 0;
+double process_time = 0;
+double sam_time = 0;
+double unmapped_time = 0;
+
 // Minimizer: value, position, origin
 typedef std::tuple<uint64_t, uint32_t, bool> minimizer_t;
 // Index: position, range
@@ -279,7 +293,6 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
-  auto i_start = std::chrono::steady_clock::now();
 
   fprintf(stderr, "[countmap-load] loading reference... ");
 
@@ -301,29 +314,31 @@ int main(int argc, char **argv) {
   fprintf(stderr, "\r[countmap-load] loaded reference           \n"
                   "[countmap-index] indexing reference... ");
 
+  auto i_start = std::chrono::steady_clock::now();
   std::shared_ptr<thread_pool::ThreadPool> thread_pool = thread_pool::createThreadPool(t);
 
-  std::vector<std::future<std::vector<minimizer_t>>> thread_futures_ref;
-  for (uint32_t tasks = 0; tasks < t - 1; ++tasks) {
-    thread_futures_ref.emplace_back(thread_pool->submit(brown::minimizers,
-        reference[0]->sequence.c_str() + tasks * reference[0]->sequence.size() / t,
-        reference[0]->sequence.size() / t + parameters.w + parameters.k - 1,
-        parameters.k, parameters.w));
-  }
-  thread_futures_ref.emplace_back(thread_pool->submit(brown::minimizers,
-        reference[0]->sequence.c_str() + (t - 1) * reference[0]->sequence.size() / t,
-        reference[0]->sequence.size() - (t - 1) * reference[0]->sequence.size() / t,
-        parameters.k, parameters.w));
+  std::vector<minimizer_t> t_minimizers = collect_minimizers(reference[0], parameters, t);
+  // std::vector<std::future<std::vector<minimizer_t>>> thread_futures_ref;
+  // for (uint32_t tasks = 0; tasks < t - 1; ++tasks) {
+  //   thread_futures_ref.emplace_back(thread_pool->submit(brown::minimizers,
+  //       reference[0]->sequence.c_str() + tasks * reference[0]->sequence.size() / t,
+  //       reference[0]->sequence.size() / t + parameters.w + parameters.k - 1,
+  //       parameters.k, parameters.w));
+  // }
+  // thread_futures_ref.emplace_back(thread_pool->submit(brown::minimizers,
+  //       reference[0]->sequence.c_str() + (t - 1) * reference[0]->sequence.size() / t,
+  //       reference[0]->sequence.size() - (t - 1) * reference[0]->sequence.size() / t,
+  //       parameters.k, parameters.w));
 
-  std::vector<minimizer_t> t_minimizers;
-  for (uint32_t i = 0; i < t; ++i) {
-    thread_futures_ref[i].wait();
-    uint32_t offset = i * reference[0]->sequence.size() / t;
-    for (auto& el : thread_futures_ref[i].get()) {
-      std::get<1>(el) += offset;
-      t_minimizers.push_back(el);
-    }
-  }
+  // std::vector<minimizer_t> t_minimizers;
+  // for (uint32_t i = 0; i < t; ++i) {
+  //   thread_futures_ref[i].wait();
+  //   uint32_t offset = i * reference[0]->sequence.size() / t;
+  //   for (auto& el : thread_futures_ref[i].get()) {
+  //     std::get<1>(el) += offset;
+  //     t_minimizers.push_back(el);
+  //   }
+  // }
   prep_ref(t_minimizers, parameters.f);
   std::unordered_map<uint64_t, index_pos_t> ref_index = index_ref(t_minimizers);
   fprintf(stderr, "\r[countmap-index] indexed reference        \n");
@@ -413,9 +428,6 @@ int main(int argc, char **argv) {
       fprintf(stderr, "[countmap] batch number %u\n", batch_num++);
       fprintf(stderr, "[countmap-load] loading paired-end reads... ");
 
-
-      auto c_start = std::chrono::steady_clock::now();
-
       paired_reads_t paired_reads;
       bool status1 = parser.first->parse(paired_reads.first, batch_size);
       bool status2 = parser.second->parse(paired_reads.second, batch_size);
@@ -424,7 +436,7 @@ int main(int argc, char **argv) {
       
       fastaq::stats pr1_stats = fastaq::FastAQ::print_statistics(paired_reads.first, reads_file1);
       fastaq::stats pr2_stats = fastaq::FastAQ::print_statistics(paired_reads.second, reads_file2);
-      
+
       if (paired) {
         if (pr1_stats.num != pr2_stats.num) {
           fprintf(stderr, "[countmap] error: Paired-end read files must have equal number of reads (pairs).\n");
@@ -442,6 +454,7 @@ int main(int argc, char **argv) {
         }
       }
       
+      auto c_start = std::chrono::steady_clock::now();
       std::vector<std::future<std::string>> thread_futures;
       for (unsigned int tasks = 0; tasks < t - 1; ++tasks) {
         thread_futures.emplace_back(thread_pool->submit(paired ? map_paired : map_as_single, 
@@ -452,10 +465,16 @@ int main(int argc, char **argv) {
                 std::ref(ref_index), std::ref(t_minimizers), std::ref(reference[0]), std::ref(paired_reads),
                 std::ref(parameters), (t - 1) * paired_reads.first.size() / t, paired_reads.first.size()));
       
+      double print_time = 0;
       for (auto& it : thread_futures) {
         it.wait();
+        auto p_start = std::chrono::steady_clock::now();
         printf("%s", it.get().c_str());
+        auto p_end = std::chrono::steady_clock::now();
+        auto p_interval = std::chrono::duration_cast<std::chrono::duration<double>>(p_end - p_start);
+        print_time += p_interval.count();
       }
+      fprintf(stderr, "[countmap-map] print time: %.2f sec\n", print_time);
 
       auto c_end = std::chrono::steady_clock::now();
       auto c_interval = std::chrono::duration_cast<std::chrono::duration<double>>(c_end - c_start);
@@ -491,7 +510,6 @@ int main(int argc, char **argv) {
       fprintf(stderr, "[countmap] batch number %u\n", batch_num++);
       fprintf(stderr, "[countmap-load] loading reads... ");
 
-      auto c_start = std::chrono::steady_clock::now();
 
       std::vector<std::unique_ptr<fastaq::FastAQ>> reads;
       bool status = parser->parse(reads, batch_size);
@@ -500,6 +518,7 @@ int main(int argc, char **argv) {
 
       fastaq::FastAQ::print_statistics(reads, reads_file);
 
+      auto c_start = std::chrono::steady_clock::now();
       std::vector<std::future<std::string>> thread_futures;
       for (unsigned int tasks = 0; tasks < t - 1; ++tasks) {
         thread_futures.emplace_back(thread_pool->submit(map_single, std::ref(ref_index), std::ref(t_minimizers),
@@ -528,6 +547,40 @@ int main(int argc, char **argv) {
   auto m_end = std::chrono::steady_clock::now();
   auto m_interval = std::chrono::duration_cast<std::chrono::duration<double>>(m_end - m_start);
   fprintf(stderr, "[countmap-map] mapping time: %.2f sec\n", m_interval.count());
+
+  std::cerr << "Clip        " << clip_time << std::endl;
+  std::cerr << "            " << clip_time / m_interval.count() * 100 << "%" << std::endl;
+  std::cerr << "Minimizer   " << minimizer_time << std::endl;
+  std::cerr << "            " << minimizer_time / m_interval.count() * 100 << "%" << std::endl;
+  std::cerr << "Hits        " << hits_time << std::endl;
+  std::cerr << "            " << hits_time / m_interval.count() * 100 << "%" << std::endl;
+  std::cerr << "Radix       " << radix_time << std::endl;
+  std::cerr << "            " << radix_time / m_interval.count() * 100 << "%" << std::endl;
+  std::cerr << "Candidates  " << candidates_time << std::endl;
+  std::cerr << "            " << candidates_time / m_interval.count() * 100 << "%" << std::endl;
+  std::cerr << "Check       " << check_time << std::endl;
+  std::cerr << "            " << check_time / m_interval.count() * 100 << "%" << std::endl;
+  std::cerr << "Region      " << region_time << std::endl;
+  std::cerr << "            " << region_time / m_interval.count() * 100 << "%" << std::endl;
+  std::cerr << "Expand      " << expand_time << std::endl;
+  std::cerr << "            " << expand_time / m_interval.count() * 100 << "%" << std::endl;
+  std::cerr << "Revcom      " << revcomp_time << std::endl;
+  std::cerr << "            " << revcomp_time / m_interval.count() * 100 << "%" << std::endl;
+  std::cerr << "  KSW2        " << ksw2_time << std::endl;
+  std::cerr << "              " << ksw2_time / m_interval.count() * 100 << "%" << std::endl;
+  std::cerr << "Process     " << process_time << std::endl;
+  std::cerr << "            " << process_time / m_interval.count() * 100 << "%" << std::endl;
+  std::cerr << "SAM         " << sam_time << std::endl;
+  std::cerr << "            " << sam_time / m_interval.count() * 100 << "%" << std::endl;
+  std::cerr << "Unmapped    " << unmapped_time << std::endl;
+  std::cerr << "            " << unmapped_time / m_interval.count() * 100 << "%" << std::endl;
+
+  double prep_time = clip_time + minimizer_time + hits_time + radix_time + candidates_time + check_time + region_time + expand_time + revcomp_time;
+  std::cerr << "Preparation " << prep_time << std::endl;
+  std::cerr << "            " << prep_time / m_interval.count() * 100 << "%" << std::endl;
+  std::cerr << "Alignment   " << ksw2_time << std::endl;
+  std::cerr << "            " << clip_time / m_interval.count() * 100 << "%" << std::endl;
+
 
   return 0;
 }

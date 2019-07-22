@@ -4,8 +4,49 @@
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
+#include <future>
 
 #include "index.hpp"
+#include "brown_minimizers.hpp"
+#include "thread_pool/thread_pool.hpp"
+
+std::vector<minimizer_t> collect_minimizers(const std::unique_ptr<fastaq::FastAQ>& ref, const mapping_params_t& parameters, const uint32_t t) {
+  std::vector<minimizer_t> t_minimizers;
+  std::shared_ptr<thread_pool::ThreadPool> thread_pool = thread_pool::createThreadPool();
+  uint32_t start = 0;
+  uint32_t end = 0;
+  while (end < ref->sequence.size()) {
+    while (start < ref->sequence.size() && ref->sequence[end] == 'N') start++;
+    if (start == ref->sequence.size()) break;
+    end = start;
+    while (end < ref->sequence.size() && ref->sequence[end] != 'N') end++;
+    uint32_t len = end - start;
+    if (len >= parameters.w + parameters.k + 1) {
+      std::vector<std::future<std::vector<minimizer_t>>> thread_futures_ref;
+      for (uint32_t tasks = 0; tasks < t - 1; ++tasks) {
+        thread_futures_ref.emplace_back(thread_pool->submit(brown::minimizers,
+            ref->sequence.c_str() + start + tasks * len / t,
+            len / t + parameters.w + parameters.k - 1,
+            parameters.k, parameters.w));
+      }
+      thread_futures_ref.emplace_back(thread_pool->submit(brown::minimizers,
+            ref->sequence.c_str() + start + (t - 1) * len / t,
+            len - (t - 1) * len / t,
+            parameters.k, parameters.w));
+
+      for (uint32_t i = 0; i < t; ++i) {
+        thread_futures_ref[i].wait();
+        uint32_t offset = start + i * len / t;
+        for (auto& el : thread_futures_ref[i].get()) {
+          std::get<1>(el) += offset;
+          t_minimizers.push_back(el);
+        }
+      }
+    }
+    start = end;
+  }
+  return t_minimizers;
+}
 
 // Remove f most frequent minimizers, prepare target minimizers vector for index structure
 // Args: t_minimizers - list of target minimizers
