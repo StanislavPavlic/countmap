@@ -178,7 +178,7 @@ mapping_t single_mapping(const std::string& qname, const std::string& query,
   m.qname = qname;
   m.flag = std::get<2>(region.first) ? 0x10 : 0x0;
   m.rname = rname;
-  m.pos = std::get<1>(region.first) + 1;
+  m.pos = std::get<1>(region.first) + (start_off - ref_off) + 1;
   m.mapq = (uint32_t)round((double)std::get<0>(cigar) / (query.size() - start_off - end_off) * 60);;
   m.cigar = preclip + std::get<2>(cigar) + postclip;
   m.rnext = "*";
@@ -274,10 +274,10 @@ std::pair<mapping_t, mapping_t> pair_mapping(const std::string& qname,
 
   m1.flag = 0x1 | prop_aligned | (std::get<2>(region_pair.first.first) ? 0x10 : 0x0) 
                 | (std::get<2>(region_pair.second.first) ? 0x20 : 0x0) | 0x40;
-  m1.pos = std::get<1>(region_pair.first.first) + 1;
+  m1.pos = std::get<1>(region_pair.first.first) + ref_off1 + 1;
   m1.mapq = (uint32_t)round((double)std::get<0>(cigar1) / (query1.size() - start_off1 - end_off1) * 60);
   m1.cigar = preclip1 + std::get<2>(cigar1) + postclip1;
-  m1.pnext = std::get<1>(region_pair.second.first) + 1;
+  m1.pnext = std::get<1>(region_pair.second.first) + ref_off2 + 1;
   m1.tlen = insert_size;
   m1.seq = query1;
   m1.qual = qual1;
@@ -286,10 +286,10 @@ std::pair<mapping_t, mapping_t> pair_mapping(const std::string& qname,
   
   m2.flag = 0x1 | prop_aligned | (std::get<2>(region_pair.second.first) ? 0x10 : 0x0) 
                 | (std::get<2>(region_pair.first.first) ? 0x20 : 0x0) | 0x80;
-  m2.pos = std::get<1>(region_pair.second.first) + 1;
+  m2.pos = std::get<1>(region_pair.second.first) + ref_off2 + 1;
   m2.mapq = (uint32_t)round((double)std::get<0>(cigar2) / (query2.size() - (start_off2 + end_off2)) * 60);
   m2.cigar = preclip2 + std::get<2>(cigar2) + postclip2;
-  m2.pnext = std::get<1>(region_pair.first.first) + 1;
+  m2.pnext = std::get<1>(region_pair.first.first) + ref_off1 + 1;
   m2.tlen = -insert_size;
   m2.seq = query2;
   m2.qual = qual2;
