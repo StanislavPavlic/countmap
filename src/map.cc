@@ -23,11 +23,21 @@ extern double hits_time;
 extern double radix_time;
 extern double candidates_time;
 extern double check_time;
+extern double circ_time;
+extern double clip_time_2;
+extern double minimizer_time_2;
+extern double hits_time_2;
+extern double radix_time_2;
+extern double candidates_time_2;
+extern double check_time_2;
+extern double circ_time_2;
 extern double region_time;
 extern double expand_time;
 extern double revcomp_time;
 extern double ksw2_time;
 extern double process_time;
+extern double process_time_2;
+extern double second_time;
 extern double sam_time;
 extern double unmapped_time;
 
@@ -256,26 +266,26 @@ void process_pairs(std::vector<std::pair<mapping_t, mapping_t>>& mappings,
   std::unordered_set<std::pair<region_t, region_t>> processed;
 
   for (uint32_t j = 0; j < checked.first.size(); ++j) {
-    // auto time_start = std::chrono::steady_clock::now();
+    auto time_start = std::chrono::steady_clock::now();
     std::pair<region_t, region_t> region_pair(find_region(checked.first[j]),
                                               find_region(checked.second[j]));
-    // auto time_end = std::chrono::steady_clock::now();
-    // auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    // region_time += time_interval.count();
+    auto time_end = std::chrono::steady_clock::now();
+    auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    region_time += time_interval.count();
 
-    // time_start = std::chrono::steady_clock::now();
+    time_start = std::chrono::steady_clock::now();
     expand_region(region_pair.first, first->sequence.size(), 
                   k, reference->sequence.size());
     expand_region(region_pair.second, second->sequence.size(), 
                   k, reference->sequence.size());
-    // time_end = std::chrono::steady_clock::now();
-    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    // expand_time += time_interval.count();
+    time_end = std::chrono::steady_clock::now();
+    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    expand_time += time_interval.count();
 
     if (processed.find(region_pair) != processed.end()) continue;
     processed.insert(region_pair);
 
-    // time_start = std::chrono::steady_clock::now();
+    time_start = std::chrono::steady_clock::now();
     std::string rc;
     std::string rq;
 
@@ -291,9 +301,9 @@ void process_pairs(std::vector<std::pair<mapping_t, mapping_t>>& mappings,
     std::string* quality2 = std::get<2>(region_pair.second.first)
                             ? &(rq = std::string(second->quality.rbegin(), second->quality.rend()))
                             : &(second->quality);
-    // time_end = std::chrono::steady_clock::now();
-    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    // revcomp_time += time_interval.count();
+    time_end = std::chrono::steady_clock::now();
+    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    revcomp_time += time_interval.count();
 
     mappings.emplace_back(
       pair_mapping(
@@ -447,25 +457,25 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
   std::string sam;
 
   for (uint32_t i = t_start; i < t_end; ++i) {
-    // auto time_start = std::chrono::steady_clock::now();
+    auto time_start = std::chrono::steady_clock::now();
     std::pair<int32_t, int32_t> clipped1 = clip(paired_reads.first[i]->sequence, parameters.k, parameters.w);
     std::pair<int32_t, int32_t> clipped2 = clip(paired_reads.second[i]->sequence, parameters.k, parameters.w);
-    // auto time_end = std::chrono::steady_clock::now();
-    // auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    // clip_time += time_interval.count();
+    auto time_end = std::chrono::steady_clock::now();
+    auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    clip_time += time_interval.count();
     if (clipped1.first < 0 || clipped2.first < 0) {
-      // time_start = std::chrono::steady_clock::now();
+      time_start = std::chrono::steady_clock::now();
       sam += unmapped_sam(paired_reads.first[i]->name, paired_reads.first[i]->sequence,
                           paired_reads.first[i]->quality, 1, 1, 0)
              + unmapped_sam(paired_reads.second[i]->name, paired_reads.second[i]->sequence, 
                             paired_reads.second[i]->quality, 1, 0, 1);
-      // time_end = std::chrono::steady_clock::now();
-      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-      // unmapped_time += time_interval.count();
+      time_end = std::chrono::steady_clock::now();
+      time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      unmapped_time += time_interval.count();
       continue;
     }
 
-    // time_start = std::chrono::steady_clock::now();
+    time_start = std::chrono::steady_clock::now();
     paired_minimizers_t p_minimizers(brown::minimizers(paired_reads.first[i]->sequence.c_str() + clipped1.first,
                                                        paired_reads.first[i]->sequence.size() - clipped1.first - clipped1.second,
                                                        parameters.k, parameters.w),
@@ -482,47 +492,51 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
         std::get<1>(min) += clipped2.first;
       }
     }
-    // time_end = std::chrono::steady_clock::now();
-    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    // minimizer_time += time_interval.count();
+    time_end = std::chrono::steady_clock::now();
+    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    minimizer_time += time_interval.count();
 
-    // time_start = std::chrono::steady_clock::now();
+    time_start = std::chrono::steady_clock::now();
     split_hits_t hits1;
     split_hits_t hits2;
     find_minimizer_hits(hits1.first, hits1.second, ref_index, t_minimizers, p_minimizers.first);
     find_minimizer_hits(hits2.first, hits2.second, ref_index, t_minimizers, p_minimizers.second);
-    // time_end = std::chrono::steady_clock::now();
-    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    // hits_time += time_interval.count();
+    time_end = std::chrono::steady_clock::now();
+    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    hits_time += time_interval.count();
 
-    // time_start = std::chrono::steady_clock::now();
+    time_start = std::chrono::steady_clock::now();
     radixsort(hits1.first);
     radixsort(hits1.second);
     radixsort(hits2.first);
     radixsort(hits2.second);
-    // time_end = std::chrono::steady_clock::now();
-    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    // radix_time += time_interval.count();
+    time_end = std::chrono::steady_clock::now();
+    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    radix_time += time_interval.count();
 
-    // time_start = std::chrono::steady_clock::now();
+    time_start = std::chrono::steady_clock::now();
     std::pair<bin_t, bin_t> candidates1(
         extract_candidates(hits1.first, parameters.threshold, paired_reads.first[i]->sequence.size()),
         extract_candidates(hits2.second, parameters.threshold, paired_reads.second[i]->sequence.size()));
     std::pair<bin_t, bin_t> candidates2(
         extract_candidates(hits1.second, parameters.threshold, paired_reads.first[i]->sequence.size()),
         extract_candidates(hits2.first, parameters.threshold, paired_reads.second[i]->sequence.size()));
-    // time_end = std::chrono::steady_clock::now();
-    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    // candidates_time += time_interval.count();
+    time_end = std::chrono::steady_clock::now();
+    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    candidates_time += time_interval.count();
 
-    // time_start = std::chrono::steady_clock::now();
+    time_start = std::chrono::steady_clock::now();
     paired_checked_t checked1 = check_pairing(candidates1, parameters.insert_size,
                                               paired_reads.second[i]->sequence.size(), reference->sequence.size());
     paired_checked_t checked2 = check_pairing(candidates2, parameters.insert_size,
                                               paired_reads.first[i]->sequence.size(), reference->sequence.size());
+    time_end = std::chrono::steady_clock::now();
+    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    check_time += time_interval.count();
 
     if (checked1.first.size() == 2) {
       if (std::get<1>(checked1.first[1][0]) == (uint32_t)-1 || std::get<1>(checked1.second[1][0]) == (uint32_t)-1) {
+        time_start = std::chrono::steady_clock::now();
         if (std::get<1>(checked1.first[1][0]) == (uint32_t)-1) {
           checked1.first[1] = checked1.first[0];
         } else {
@@ -549,11 +563,15 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
           sam2 += sam_format(mappings[0].second);
         }
         sam += sam1 + sam2;
+        time_end = std::chrono::steady_clock::now();
+        time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+        circ_time += time_interval.count();
         continue;
       }
     }
     if (checked2.first.size() == 2) {
       if (std::get<1>(checked2.first[1][0]) == (uint32_t)-1 || std::get<1>(checked2.second[1][0]) == (uint32_t)-1) {
+        time_start = std::chrono::steady_clock::now();
         if (std::get<1>(checked2.first[1][0]) == (uint32_t)-1) {
           checked2.first[1] = checked2.first[0];
         } else {
@@ -580,40 +598,41 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
           sam2 += sam_format(mappings[0].second);
         }
         sam += sam1 + sam2;
+        time_end = std::chrono::steady_clock::now();
+        time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+        circ_time += time_interval.count();
         continue;
       }
     }
-    // time_end = std::chrono::steady_clock::now();
-    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    // check_time += time_interval.count();
 
-    // time_start = std::chrono::steady_clock::now();
+    time_start = std::chrono::steady_clock::now();
     std::vector<std::pair<mapping_t, mapping_t>> mappings;
     process_pairs(mappings, checked1, reference, paired_reads.first[i], paired_reads.second[i], parameters, parameters.k, clipped1, clipped2);
     process_pairs(mappings, checked2, reference, paired_reads.first[i], paired_reads.second[i], parameters, parameters.k, clipped1, clipped2);
-    // time_end = std::chrono::steady_clock::now();
-    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    // process_time += time_interval.count();
+    time_end = std::chrono::steady_clock::now();
+    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    process_time += time_interval.count();
 
+    auto time_start_2 = std::chrono::steady_clock::now();
     if (mappings.size() == 0) {
-      // auto time_start = std::chrono::steady_clock::now();
+      time_start = std::chrono::steady_clock::now();
       clipped1 = clip(paired_reads.first[i]->sequence, parameters.k_2, parameters.w_2);
       clipped2 = clip(paired_reads.second[i]->sequence, parameters.k_2, parameters.w_2);
-      // auto time_end = std::chrono::steady_clock::now();
-      // auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-      // clip_time += time_interval.count();
+      time_end = std::chrono::steady_clock::now();
+      time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      clip_time_2 += time_interval.count();
       if (clipped1.first < 0 || clipped2.first < 0) {
-        // time_start = std::chrono::steady_clock::now();
+        time_start = std::chrono::steady_clock::now();
         sam += unmapped_sam(paired_reads.first[i]->name, paired_reads.first[i]->sequence,
                             paired_reads.first[i]->quality, 1, 1, 0)
                + unmapped_sam(paired_reads.second[i]->name, paired_reads.second[i]->sequence, 
                               paired_reads.second[i]->quality, 1, 0, 1);
-        // time_end = std::chrono::steady_clock::now();
-        // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-        // unmapped_time += time_interval.count();
+        time_end = std::chrono::steady_clock::now();
+        time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+        unmapped_time += time_interval.count();
         continue;
       }
-        // time_start = std::chrono::steady_clock::now();
+      time_start = std::chrono::steady_clock::now();
       p_minimizers = paired_minimizers_t(brown::minimizers(paired_reads.first[i]->sequence.c_str() + clipped1.first,
                                                            paired_reads.first[i]->sequence.size() - clipped1.first - clipped1.second,
                                                            parameters.k_2, parameters.w_2),
@@ -630,47 +649,51 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
           std::get<1>(min) += clipped2.first;
         }
       }
-      // time_end = std::chrono::steady_clock::now();
-      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-      // minimizer_time += time_interval.count();
+      time_end = std::chrono::steady_clock::now();
+      time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      minimizer_time_2 += time_interval.count();
 
-      // time_start = std::chrono::steady_clock::now();
+      time_start = std::chrono::steady_clock::now();
       hits1 = split_hits_t();
       hits2 = split_hits_t();
       find_minimizer_hits(hits1.first, hits1.second, ref_index_2, t_minimizers_2, p_minimizers.first);
       find_minimizer_hits(hits2.first, hits2.second, ref_index_2, t_minimizers_2, p_minimizers.second);
-      // time_end = std::chrono::steady_clock::now();
-      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-      // hits_time += time_interval.count();
+      time_end = std::chrono::steady_clock::now();
+      time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      hits_time_2 += time_interval.count();
 
-      // time_start = std::chrono::steady_clock::now();
+      time_start = std::chrono::steady_clock::now();
       radixsort(hits1.first);
       radixsort(hits1.second);
       radixsort(hits2.first);
       radixsort(hits2.second);
-      // time_end = std::chrono::steady_clock::now();
-      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-      // radix_time += time_interval.count();
+      time_end = std::chrono::steady_clock::now();
+      time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      radix_time_2 += time_interval.count();
 
-      // time_start = std::chrono::steady_clock::now();
+      time_start = std::chrono::steady_clock::now();
       candidates1 = std::pair<bin_t, bin_t>(
           extract_candidates(hits1.first, parameters.threshold, paired_reads.first[i]->sequence.size()),
           extract_candidates(hits2.second, parameters.threshold, paired_reads.second[i]->sequence.size()));
       candidates2 = std::pair<bin_t, bin_t>(
           extract_candidates(hits1.second, parameters.threshold, paired_reads.first[i]->sequence.size()),
           extract_candidates(hits2.first, parameters.threshold, paired_reads.second[i]->sequence.size()));
-      // time_end = std::chrono::steady_clock::now();
-      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-      // candidates_time += time_interval.count();
+      time_end = std::chrono::steady_clock::now();
+      time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      candidates_time_2 += time_interval.count();
 
-      // time_start = std::chrono::steady_clock::now();
+      time_start = std::chrono::steady_clock::now();
       checked1 = check_pairing(candidates1, parameters.insert_size,
                                                 paired_reads.second[i]->sequence.size(), reference->sequence.size());
       checked2 = check_pairing(candidates2, parameters.insert_size,
                                                 paired_reads.first[i]->sequence.size(), reference->sequence.size());
+      time_end = std::chrono::steady_clock::now();
+      time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      check_time_2 += time_interval.count();
 
       if (checked1.first.size() == 2) {
         if (std::get<1>(checked1.first[1][0]) == (uint32_t)-1 || std::get<1>(checked1.second[1][0]) == (uint32_t)-1) {
+          time_start = std::chrono::steady_clock::now();
           if (std::get<1>(checked1.first[1][0]) == (uint32_t)-1) {
             checked1.first[1] = checked1.first[0];
           } else {
@@ -697,11 +720,15 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
             sam2 += sam_format(mappings[0].second);
           }
           sam += sam1 + sam2;
+          time_end = std::chrono::steady_clock::now();
+          time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+          circ_time_2 += time_interval.count();
           continue;
         }
       }
       if (checked2.first.size() == 2) {
         if (std::get<1>(checked2.first[1][0]) == (uint32_t)-1 || std::get<1>(checked2.second[1][0]) == (uint32_t)-1) {
+          time_start = std::chrono::steady_clock::now();
           if (std::get<1>(checked2.first[1][0]) == (uint32_t)-1) {
             checked2.first[1] = checked2.first[0];
           } else {
@@ -728,29 +755,32 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
             sam2 += sam_format(mappings[0].second);
           }
           sam += sam1 + sam2;
+          time_end = std::chrono::steady_clock::now();
+          time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+          circ_time_2 += time_interval.count();
           continue;
         }
       }
-      // time_end = std::chrono::steady_clock::now();
-      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-      // check_time += time_interval.count();
-
-      // time_start = std::chrono::steady_clock::now();
+      
+      time_start = std::chrono::steady_clock::now();
       process_pairs(mappings, checked1, reference, paired_reads.first[i], paired_reads.second[i], parameters, parameters.k_2, clipped1, clipped2);
       process_pairs(mappings, checked2, reference, paired_reads.first[i], paired_reads.second[i], parameters, parameters.k_2, clipped1, clipped2);
-      // time_end = std::chrono::steady_clock::now();
-      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-      // process_time += time_interval.count();
+      time_end = std::chrono::steady_clock::now();
+      time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      process_time_2 += time_interval.count();
     }
+    auto time_end_2 = std::chrono::steady_clock::now();
+    auto time_interval_2 = std::chrono::duration_cast<std::chrono::duration<double>>(time_end_2 - time_start_2);
+    second_time += time_interval_2.count();
     if (mappings.size() == 0) {
-      // time_start = std::chrono::steady_clock::now();
+      time_start = std::chrono::steady_clock::now();
       sam += unmapped_sam(paired_reads.first[i]->name, paired_reads.first[i]->sequence,
                           paired_reads.first[i]->quality, 1, 1, 0)
              + unmapped_sam(paired_reads.second[i]->name, paired_reads.second[i]->sequence, 
                             paired_reads.second[i]->quality, 1, 0, 1);
-      // time_end = std::chrono::steady_clock::now();
-      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-      // unmapped_time += time_interval.count();
+      time_end = std::chrono::steady_clock::now();
+      time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      unmapped_time += time_interval.count();
       continue;
     }
 
@@ -761,7 +791,7 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
               }
     );
 
-    // time_start = std::chrono::steady_clock::now();
+    time_start = std::chrono::steady_clock::now();
     std::string sam1;
     std::string sam2;
 
@@ -795,9 +825,9 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
     }
 
     sam += sam1 + sam2;
-    // time_end = std::chrono::steady_clock::now();
-    // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-    // sam_time += time_interval.count();
+    time_end = std::chrono::steady_clock::now();
+    time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+    sam_time += time_interval.count();
   }
 
   return sam;
