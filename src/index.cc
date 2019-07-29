@@ -10,7 +10,7 @@
 #include "brown_minimizers.hpp"
 #include "thread_pool/thread_pool.hpp"
 
-std::vector<minimizer_t> collect_minimizers(const std::unique_ptr<fastaq::FastAQ>& ref, const mapping_params_t& parameters, const uint32_t t) {
+std::vector<minimizer_t> collect_minimizers(const std::unique_ptr<fastaq::FastAQ>& ref, const uint32_t w, const uint32_t k, const uint32_t t) {
   std::vector<minimizer_t> t_minimizers;
   std::shared_ptr<thread_pool::ThreadPool> thread_pool = thread_pool::createThreadPool();
   uint32_t start = 0;
@@ -21,18 +21,18 @@ std::vector<minimizer_t> collect_minimizers(const std::unique_ptr<fastaq::FastAQ
     end = start;
     while (end < ref->sequence.size() && ref->sequence[end] != 'N') end++;
     uint32_t len = end - start;
-    if (len >= parameters.w + parameters.k + 1) {
+    if (len >= w + k + 1) {
       std::vector<std::future<std::vector<minimizer_t>>> thread_futures_ref;
       for (uint32_t tasks = 0; tasks < t - 1; ++tasks) {
         thread_futures_ref.emplace_back(thread_pool->submit(brown::minimizers,
             ref->sequence.c_str() + start + tasks * len / t,
-            len / t + parameters.w + parameters.k - 1,
-            parameters.k, parameters.w));
+            len / t + w + k - 1,
+            k, w));
       }
       thread_futures_ref.emplace_back(thread_pool->submit(brown::minimizers,
             ref->sequence.c_str() + start + (t - 1) * len / t,
             len - (t - 1) * len / t,
-            parameters.k, parameters.w));
+            k, w));
 
       for (uint32_t i = 0; i < t; ++i) {
         thread_futures_ref[i].wait();

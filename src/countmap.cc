@@ -182,6 +182,8 @@ int main(int argc, char **argv) {
   parameters.band = -1;
   parameters.k = 12;
   parameters.w = 5;
+  parameters.k_2 = 9;
+  parameters.w_2 = 2;
   parameters.f = 0.001f;
   parameters.insert_size = 215;
   parameters.threshold = 2;
@@ -317,30 +319,14 @@ int main(int argc, char **argv) {
   auto i_start = std::chrono::steady_clock::now();
   std::shared_ptr<thread_pool::ThreadPool> thread_pool = thread_pool::createThreadPool(t);
 
-  std::vector<minimizer_t> t_minimizers = collect_minimizers(reference[0], parameters, t);
-  // std::vector<std::future<std::vector<minimizer_t>>> thread_futures_ref;
-  // for (uint32_t tasks = 0; tasks < t - 1; ++tasks) {
-  //   thread_futures_ref.emplace_back(thread_pool->submit(brown::minimizers,
-  //       reference[0]->sequence.c_str() + tasks * reference[0]->sequence.size() / t,
-  //       reference[0]->sequence.size() / t + parameters.w + parameters.k - 1,
-  //       parameters.k, parameters.w));
-  // }
-  // thread_futures_ref.emplace_back(thread_pool->submit(brown::minimizers,
-  //       reference[0]->sequence.c_str() + (t - 1) * reference[0]->sequence.size() / t,
-  //       reference[0]->sequence.size() - (t - 1) * reference[0]->sequence.size() / t,
-  //       parameters.k, parameters.w));
-
-  // std::vector<minimizer_t> t_minimizers;
-  // for (uint32_t i = 0; i < t; ++i) {
-  //   thread_futures_ref[i].wait();
-  //   uint32_t offset = i * reference[0]->sequence.size() / t;
-  //   for (auto& el : thread_futures_ref[i].get()) {
-  //     std::get<1>(el) += offset;
-  //     t_minimizers.push_back(el);
-  //   }
-  // }
+  std::vector<minimizer_t> t_minimizers = collect_minimizers(reference[0], parameters.w, parameters.k, t);
   prep_ref(t_minimizers, parameters.f);
   std::unordered_map<uint64_t, index_pos_t> ref_index = index_ref(t_minimizers);
+
+  std::vector<minimizer_t> t_minimizers_2 = collect_minimizers(reference[0], parameters.w_2, parameters.k_2, t);
+  prep_ref(t_minimizers_2, parameters.f);
+  std::unordered_map<uint64_t, index_pos_t> ref_index_2 = index_ref(t_minimizers_2);
+
   fprintf(stderr, "\r[countmap-index] indexed reference        \n");
 
   fastaq::FastAQ::print_statistics(reference, reference_file);
@@ -458,11 +444,13 @@ int main(int argc, char **argv) {
       std::vector<std::future<std::string>> thread_futures;
       for (unsigned int tasks = 0; tasks < t - 1; ++tasks) {
         thread_futures.emplace_back(thread_pool->submit(paired ? map_paired : map_as_single, 
-                std::ref(ref_index), std::ref(t_minimizers), std::ref(reference[0]), std::ref(paired_reads),
+                std::ref(ref_index), std::ref(ref_index_2), std::ref(t_minimizers), std::ref(t_minimizers_2), 
+                std::ref(reference[0]), std::ref(paired_reads),
                 std::ref(parameters), tasks * paired_reads.first.size() / t, (tasks + 1) * paired_reads.first.size() / t));  
       }
       thread_futures.emplace_back(thread_pool->submit(paired ? map_paired : map_as_single, 
-                std::ref(ref_index), std::ref(t_minimizers), std::ref(reference[0]), std::ref(paired_reads),
+                std::ref(ref_index), std::ref(ref_index_2), std::ref(t_minimizers), std::ref(t_minimizers_2), 
+                std::ref(reference[0]), std::ref(paired_reads),
                 std::ref(parameters), (t - 1) * paired_reads.first.size() / t, paired_reads.first.size()));
       
       double print_time = 0;

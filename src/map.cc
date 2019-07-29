@@ -250,7 +250,7 @@ std::vector<mapping_t> process_single(const std::unordered_map<uint64_t, index_p
 void process_pairs(std::vector<std::pair<mapping_t, mapping_t>>& mappings,
     paired_checked_t& checked, const std::unique_ptr<fastaq::FastAQ>& reference, 
     const std::unique_ptr<fastaq::FastAQ>& first, const std::unique_ptr<fastaq::FastAQ>& second,
-    const mapping_params_t& parameters, 
+    const mapping_params_t& parameters, const uint32_t k,
     const std::pair<int32_t, int32_t>& clipped1, 
     const std::pair<int32_t, int32_t>& clipped2) {
   std::unordered_set<std::pair<region_t, region_t>> processed;
@@ -265,9 +265,9 @@ void process_pairs(std::vector<std::pair<mapping_t, mapping_t>>& mappings,
 
     // time_start = std::chrono::steady_clock::now();
     expand_region(region_pair.first, first->sequence.size(), 
-                  parameters.k, reference->sequence.size());
+                  k, reference->sequence.size());
     expand_region(region_pair.second, second->sequence.size(), 
-                  parameters.k, reference->sequence.size());
+                  k, reference->sequence.size());
     // time_end = std::chrono::steady_clock::now();
     // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
     // expand_time += time_interval.count();
@@ -402,8 +402,8 @@ std::string map_single(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
 //       t_start      - starting index of reads to be mapped       // used for parallelization as:
 //       t_end        - last index of reads to be mapped           // [t_start, t_end)
 // Return: mapping result in SAM format
-std::string map_as_single(const std::unordered_map<uint64_t, index_pos_t>& ref_index, 
-                          const std::vector<minimizer_t>& t_minimizers,
+std::string map_as_single(const std::unordered_map<uint64_t, index_pos_t>& ref_index, const std::unordered_map<uint64_t, index_pos_t>& ref_index_2,
+                          const std::vector<minimizer_t>& t_minimizers, const std::vector<minimizer_t>& t_minimizers_2,
                           const std::unique_ptr<fastaq::FastAQ>& reference, const paired_reads_t& paired_reads,
                           const mapping_params_t& parameters, uint32_t t_start, uint32_t t_end) {
   std::string sam;
@@ -440,8 +440,8 @@ std::string map_as_single(const std::unordered_map<uint64_t, index_pos_t>& ref_i
 //       t_start      - starting index of reads to be mapped       // used for parallelization as:
 //       t_end        - last index of reads to be mapped           // [t_start, t_end)
 // Return: mapping result in SAM format
-std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_index, 
-                       const std::vector<minimizer_t>& t_minimizers,
+std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_index, const std::unordered_map<uint64_t, index_pos_t>& ref_index_2, 
+                       const std::vector<minimizer_t>& t_minimizers, const std::vector<minimizer_t>& t_minimizers_2,
                        const std::unique_ptr<fastaq::FastAQ>& reference, const paired_reads_t& paired_reads,
                        const mapping_params_t& parameters, uint32_t t_start, uint32_t t_end) {
   std::string sam;
@@ -529,7 +529,7 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
           checked1.second[1] = checked1.second[0];
         }
         std::vector<std::pair<mapping_t, mapping_t>> mappings;
-        process_pairs(mappings, checked1, reference, paired_reads.first[i], paired_reads.second[i], parameters, clipped1, clipped2);
+        process_pairs(mappings, checked1, reference, paired_reads.first[i], paired_reads.second[i], parameters, parameters.k, clipped1, clipped2);
         std::sort(mappings.begin(), mappings.end(), 
                   [] (const std::pair<mapping_t, mapping_t>& a, 
                       const std::pair<mapping_t, mapping_t>& b) {
@@ -560,7 +560,7 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
           checked2.second[1] = checked2.second[0];
         }
         std::vector<std::pair<mapping_t, mapping_t>> mappings;
-        process_pairs(mappings, checked2, reference, paired_reads.first[i], paired_reads.second[i], parameters, clipped1, clipped2);
+        process_pairs(mappings, checked2, reference, paired_reads.first[i], paired_reads.second[i], parameters, parameters.k, clipped1, clipped2);
         std::sort(mappings.begin(), mappings.end(), 
                   [] (const std::pair<mapping_t, mapping_t>& a, 
                       const std::pair<mapping_t, mapping_t>& b) {
@@ -589,12 +589,159 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
 
     // time_start = std::chrono::steady_clock::now();
     std::vector<std::pair<mapping_t, mapping_t>> mappings;
-    process_pairs(mappings, checked1, reference, paired_reads.first[i], paired_reads.second[i], parameters, clipped1, clipped2);
-    process_pairs(mappings, checked2, reference, paired_reads.first[i], paired_reads.second[i], parameters, clipped1, clipped2);
+    process_pairs(mappings, checked1, reference, paired_reads.first[i], paired_reads.second[i], parameters, parameters.k, clipped1, clipped2);
+    process_pairs(mappings, checked2, reference, paired_reads.first[i], paired_reads.second[i], parameters, parameters.k, clipped1, clipped2);
     // time_end = std::chrono::steady_clock::now();
     // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
     // process_time += time_interval.count();
 
+    if (mappings.size() == 0) {
+      // auto time_start = std::chrono::steady_clock::now();
+      clipped1 = clip(paired_reads.first[i]->sequence, parameters.k_2, parameters.w_2);
+      clipped2 = clip(paired_reads.second[i]->sequence, parameters.k_2, parameters.w_2);
+      // auto time_end = std::chrono::steady_clock::now();
+      // auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      // clip_time += time_interval.count();
+      if (clipped1.first < 0 || clipped2.first < 0) {
+        // time_start = std::chrono::steady_clock::now();
+        sam += unmapped_sam(paired_reads.first[i]->name, paired_reads.first[i]->sequence,
+                            paired_reads.first[i]->quality, 1, 1, 0)
+               + unmapped_sam(paired_reads.second[i]->name, paired_reads.second[i]->sequence, 
+                              paired_reads.second[i]->quality, 1, 0, 1);
+        // time_end = std::chrono::steady_clock::now();
+        // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+        // unmapped_time += time_interval.count();
+        continue;
+      }
+        // time_start = std::chrono::steady_clock::now();
+      p_minimizers = paired_minimizers_t(brown::minimizers(paired_reads.first[i]->sequence.c_str() + clipped1.first,
+                                                           paired_reads.first[i]->sequence.size() - clipped1.first - clipped1.second,
+                                                           parameters.k_2, parameters.w_2),
+                                         brown::minimizers(paired_reads.second[i]->sequence.c_str() + clipped2.first,
+                                                           paired_reads.second[i]->sequence.size() - clipped2.first - clipped2.second,
+                                                           parameters.k_2, parameters.w_2));
+      if (clipped1.first) {
+        for (auto& min : p_minimizers.first) {
+          std::get<1>(min) += clipped1.first;
+        }
+      }
+      if (clipped2.first) {
+        for (auto& min : p_minimizers.second) {
+          std::get<1>(min) += clipped2.first;
+        }
+      }
+      // time_end = std::chrono::steady_clock::now();
+      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      // minimizer_time += time_interval.count();
+
+      // time_start = std::chrono::steady_clock::now();
+      hits1 = split_hits_t();
+      hits2 = split_hits_t();
+      find_minimizer_hits(hits1.first, hits1.second, ref_index_2, t_minimizers_2, p_minimizers.first);
+      find_minimizer_hits(hits2.first, hits2.second, ref_index_2, t_minimizers_2, p_minimizers.second);
+      // time_end = std::chrono::steady_clock::now();
+      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      // hits_time += time_interval.count();
+
+      // time_start = std::chrono::steady_clock::now();
+      radixsort(hits1.first);
+      radixsort(hits1.second);
+      radixsort(hits2.first);
+      radixsort(hits2.second);
+      // time_end = std::chrono::steady_clock::now();
+      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      // radix_time += time_interval.count();
+
+      // time_start = std::chrono::steady_clock::now();
+      candidates1 = std::pair<bin_t, bin_t>(
+          extract_candidates(hits1.first, parameters.threshold, paired_reads.first[i]->sequence.size()),
+          extract_candidates(hits2.second, parameters.threshold, paired_reads.second[i]->sequence.size()));
+      candidates2 = std::pair<bin_t, bin_t>(
+          extract_candidates(hits1.second, parameters.threshold, paired_reads.first[i]->sequence.size()),
+          extract_candidates(hits2.first, parameters.threshold, paired_reads.second[i]->sequence.size()));
+      // time_end = std::chrono::steady_clock::now();
+      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      // candidates_time += time_interval.count();
+
+      // time_start = std::chrono::steady_clock::now();
+      checked1 = check_pairing(candidates1, parameters.insert_size,
+                                                paired_reads.second[i]->sequence.size(), reference->sequence.size());
+      checked2 = check_pairing(candidates2, parameters.insert_size,
+                                                paired_reads.first[i]->sequence.size(), reference->sequence.size());
+
+      if (checked1.first.size() == 2) {
+        if (std::get<1>(checked1.first[1][0]) == (uint32_t)-1 || std::get<1>(checked1.second[1][0]) == (uint32_t)-1) {
+          if (std::get<1>(checked1.first[1][0]) == (uint32_t)-1) {
+            checked1.first[1] = checked1.first[0];
+          } else {
+            checked1.second[1] = checked1.second[0];
+          }
+          std::vector<std::pair<mapping_t, mapping_t>> mappings;
+          process_pairs(mappings, checked1, reference, paired_reads.first[i], paired_reads.second[i], parameters, parameters.k_2, clipped1, clipped2);
+          std::sort(mappings.begin(), mappings.end(), 
+                    [] (const std::pair<mapping_t, mapping_t>& a, 
+                        const std::pair<mapping_t, mapping_t>& b) {
+                      return a.first.mapq + a.second.mapq > b.first.mapq + b.second.mapq;
+                    }
+          );
+          std::string sam1, sam2;
+          if (mappings[0].first.pos == mappings[1].first.pos) {
+            mappings[1].second.flag |= 0x800;
+            sam1 += sam_format(mappings[0].first);
+            sam2 += sam_format(mappings[0].second);
+            sam2 += sam_format(mappings[1].second);
+          } else {
+            mappings[1].first.flag |= 0x800;
+            sam1 += sam_format(mappings[0].first);
+            sam1 += sam_format(mappings[1].first);
+            sam2 += sam_format(mappings[0].second);
+          }
+          sam += sam1 + sam2;
+          continue;
+        }
+      }
+      if (checked2.first.size() == 2) {
+        if (std::get<1>(checked2.first[1][0]) == (uint32_t)-1 || std::get<1>(checked2.second[1][0]) == (uint32_t)-1) {
+          if (std::get<1>(checked2.first[1][0]) == (uint32_t)-1) {
+            checked2.first[1] = checked2.first[0];
+          } else {
+            checked2.second[1] = checked2.second[0];
+          }
+          std::vector<std::pair<mapping_t, mapping_t>> mappings;
+          process_pairs(mappings, checked2, reference, paired_reads.first[i], paired_reads.second[i], parameters, parameters.k_2, clipped1, clipped2);
+          std::sort(mappings.begin(), mappings.end(), 
+                    [] (const std::pair<mapping_t, mapping_t>& a, 
+                        const std::pair<mapping_t, mapping_t>& b) {
+                      return a.first.mapq + a.second.mapq > b.first.mapq + b.second.mapq;
+                    }
+          );
+          std::string sam1, sam2;
+          if (mappings[0].first.pos == mappings[1].first.pos) {
+            mappings[1].second.flag |= 0x800;
+            sam1 += sam_format(mappings[0].first);
+            sam2 += sam_format(mappings[0].second);
+            sam2 += sam_format(mappings[1].second);
+          } else {
+            mappings[1].first.flag |= 0x800;
+            sam1 += sam_format(mappings[0].first);
+            sam1 += sam_format(mappings[1].first);
+            sam2 += sam_format(mappings[0].second);
+          }
+          sam += sam1 + sam2;
+          continue;
+        }
+      }
+      // time_end = std::chrono::steady_clock::now();
+      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      // check_time += time_interval.count();
+
+      // time_start = std::chrono::steady_clock::now();
+      process_pairs(mappings, checked1, reference, paired_reads.first[i], paired_reads.second[i], parameters, parameters.k_2, clipped1, clipped2);
+      process_pairs(mappings, checked2, reference, paired_reads.first[i], paired_reads.second[i], parameters, parameters.k_2, clipped1, clipped2);
+      // time_end = std::chrono::steady_clock::now();
+      // time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+      // process_time += time_interval.count();
+    }
     if (mappings.size() == 0) {
       // time_start = std::chrono::steady_clock::now();
       sam += unmapped_sam(paired_reads.first[i]->name, paired_reads.first[i]->sequence,
