@@ -219,7 +219,7 @@ int main(int argc, char **argv) {
   uint32_t batch_size = 256 * 1024 * 1024;
   std::string cl_flags;
 
-  while ((optchr = getopt_long(argc, argv, "hvpIam:M:o:e:b:k:K:w:W:f:i:s:T:t:B:", long_options, NULL)) != -1) {
+  while ((optchr = getopt_long(argc, argv, "hvpIam:M:o:e:b:k:K:w:W:f:i:s:T:S:t:B:", long_options, NULL)) != -1) {
     cl_flags += "-", cl_flags += optchr, cl_flags += " ";
     if (optarg != nullptr) cl_flags += optarg, cl_flags += " ";
     switch (optchr) {
