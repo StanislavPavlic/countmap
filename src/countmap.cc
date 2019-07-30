@@ -85,6 +85,7 @@ static struct option long_options[] = {
   {"insert_size", required_argument, NULL, 'i'},
   {"st_deviation", required_argument, NULL, 's'},
   {"threshold", required_argument, NULL, 'T'},
+  {"threshold_s", required_argument, NULL, 'S'},
   {"threads", required_argument, NULL, 't'},
   {"batch_size", required_argument, NULL, 'B'},
   {NULL, no_argument, NULL, 0}
@@ -136,13 +137,13 @@ void help(void) {
          "  -K  or  --kmer_s           <uint>\n"
          "                               default: 9\n"
          "                               constraints: largest supported is 32\n"
-         "                               k-mer size (second index)\n"
+         "                               k-mer size (second round)\n"
          "  -w  or  --window_length    <uint>\n"
          "                               default: 5\n"
          "                               length of window\n"
          "  -W  or  --window_length_s  <uint>\n"
          "                               default: 2\n"
-         "                               length of window (second index)\n"
+         "                               length of window (second round)\n"
          "  -f  or  --frequency        <float>\n"
          "                               default: 0.01\n"
          "                               constraints: must be from [0, 1]\n"
@@ -159,6 +160,10 @@ void help(void) {
          "                               default: 2\n"
          "                               number of hits needed in order to consider\n"
          "                               a region a candidate for mapping\n"
+         "  -S  or  --threshold_s      <uint>\n"
+         "                               default: 3\n"
+         "                               number of hits needed in order to consider\n"
+         "                               a region a candidate for mapping (second round)\n"
          "  -t  or  --threads          <uint>\n"
          "                               default: 3\n"
          "                               number of threads\n"
@@ -206,6 +211,7 @@ int main(int argc, char **argv) {
   parameters.f = 0.01f;
   parameters.insert_size = 215;
   parameters.threshold = 2;
+  parameters.threshold_2 = 3;
   bool paired = false;
   bool infer_is = false;
   bool set_insert = false;
@@ -292,6 +298,10 @@ int main(int argc, char **argv) {
       }
       case 'T': {
         parameters.threshold = atoi(optarg);
+        break;
+      }
+      case 'S': {
+        parameters.threshold_2 = atoi(optarg);
         break;
       }
       case 't': {

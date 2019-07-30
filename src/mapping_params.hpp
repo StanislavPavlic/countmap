@@ -18,4 +18,5 @@ struct mapping_params_t {
   uint32_t insert_size;
   float sd;
   uint32_t threshold;
+  uint32_t threshold_2;
 };

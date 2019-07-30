@@ -673,11 +673,11 @@ std::string map_paired(const std::unordered_map<uint64_t, index_pos_t>& ref_inde
 
       time_start = std::chrono::steady_clock::now();
       candidates1 = std::pair<bin_t, bin_t>(
-          extract_candidates(hits1.first, parameters.threshold, paired_reads.first[i]->sequence.size()),
-          extract_candidates(hits2.second, parameters.threshold, paired_reads.second[i]->sequence.size()));
+          extract_candidates(hits1.first, parameters.threshold_2, paired_reads.first[i]->sequence.size()),
+          extract_candidates(hits2.second, parameters.threshold_2, paired_reads.second[i]->sequence.size()));
       candidates2 = std::pair<bin_t, bin_t>(
-          extract_candidates(hits1.second, parameters.threshold, paired_reads.first[i]->sequence.size()),
-          extract_candidates(hits2.first, parameters.threshold, paired_reads.second[i]->sequence.size()));
+          extract_candidates(hits1.second, parameters.threshold_2, paired_reads.first[i]->sequence.size()),
+          extract_candidates(hits2.first, parameters.threshold_2, paired_reads.second[i]->sequence.size()));
       time_end = std::chrono::steady_clock::now();
       time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
       candidates_time_2 += time_interval.count();
