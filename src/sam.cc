@@ -16,7 +16,7 @@
 #include "mapping.hpp"
 #include "ksw2.h"
 
-extern double ksw2_time;
+// extern double ksw2_time;
 
 std::unordered_map<uint8_t, uint8_t> c = {{'C', 0}, {'A', 1}, {'T', 2}, {'U', 2}, {'G', 3}};
 
@@ -253,16 +253,16 @@ std::pair<mapping_t, mapping_t> pair_mapping(const std::string& qname,
   uint32_t len1 = (query1.size() - end_off1) - start_off1;
   uint32_t len2 = (query2.size() - end_off2) - start_off2;
 
-  auto time_start = std::chrono::steady_clock::now();
+  // auto time_start = std::chrono::steady_clock::now();
   std::tuple<uint32_t, int32_t, std::string> cigar1 = ksw2(ref.c_str() + std::get<1>(region_pair.first.first) + ref_off1, len1, 
                                                            query1.c_str() + start_off1, len1, 
                                                            parameters);
   std::tuple<uint32_t, int32_t, std::string> cigar2 = ksw2(ref.c_str() + std::get<1>(region_pair.second.first) + ref_off2, len2, 
                                                            query2.c_str() + start_off2, len2, 
                                                            parameters);
-  auto time_end = std::chrono::steady_clock::now();
-  auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
-  ksw2_time += time_interval.count();
+  // auto time_end = std::chrono::steady_clock::now();
+  // auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+  // ksw2_time += time_interval.count();
 
   int prop_aligned = (float)abs(abs(insert_size) - (int32_t)parameters.insert_size) < 5 * parameters.sd ? 0x2 : 0x0;
 
