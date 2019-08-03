@@ -208,7 +208,7 @@ int main(int argc, char **argv) {
   parameters.w = 5;
   parameters.k_2 = 9;
   parameters.w_2 = 2;
-  parameters.f = 0.01f;
+  parameters.f = 0.001f;
   parameters.insert_size = 215;
   parameters.threshold = 2;
   parameters.threshold_2 = 3;

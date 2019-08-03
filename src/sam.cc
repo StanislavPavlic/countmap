@@ -15,6 +15,7 @@
 #include "mapping_params.hpp"
 #include "mapping.hpp"
 #include "ksw2.h"
+#include "edlib.h"
 
 // extern double ksw2_time;
 
@@ -39,6 +40,16 @@ void update_offset(uint32_t clip, uint32_t& off1, uint32_t& off2, bool strand) {
     }
   }
 }
+
+inline std::pair<std::string, int32_t> edlib(const char* target, const uint32_t t_len, 
+                                             const char* query, const uint32_t q_len) {
+  EdlibAlignResult result = edlibAlign(query, q_len, target, t_len, edlibNewAlignConfig(-1, EDLIB_MODE_NW, EDLIB_TASK_PATH, NULL, 0));
+  std::string cigar(edlibAlignmentToCigar(result.alignment, result.alignmentLength, EDLIB_CIGAR_STANDARD));
+  int32_t edit_distance = result.editDistance;
+  edlibFreeAlignResult(result);
+  return std::make_pair(cigar, edit_distance);
+}
+
 
 // Perform KSW2 algorithm on found region, return cigar
 // Args: target     - target sequence
@@ -94,6 +105,8 @@ std::tuple<uint32_t, int32_t, std::string> ksw2(const char* target, const uint32
   }
 
   free(ez.cigar); free(ts); free(qs);
+
+
 
   return std::make_tuple(matches, ez.score, cigar);
 }
@@ -254,15 +267,20 @@ std::pair<mapping_t, mapping_t> pair_mapping(const std::string& qname,
   uint32_t len2 = (query2.size() - end_off2) - start_off2;
 
   // auto time_start = std::chrono::steady_clock::now();
-  std::tuple<uint32_t, int32_t, std::string> cigar1 = ksw2(ref.c_str() + std::get<1>(region_pair.first.first) + ref_off1, len1, 
-                                                           query1.c_str() + start_off1, len1, 
-                                                           parameters);
-  std::tuple<uint32_t, int32_t, std::string> cigar2 = ksw2(ref.c_str() + std::get<1>(region_pair.second.first) + ref_off2, len2, 
-                                                           query2.c_str() + start_off2, len2, 
-                                                           parameters);
+  // std::tuple<uint32_t, int32_t, std::string> cigar1 = ksw2(ref.c_str() + std::get<1>(region_pair.first.first) + ref_off1, len1, 
+  //                                                          query1.c_str() + start_off1, len1, 
+  //                                                          parameters);
+  // std::tuple<uint32_t, int32_t, std::string> cigar2 = ksw2(ref.c_str() + std::get<1>(region_pair.second.first) + ref_off2, len2, 
+  //                                                          query2.c_str() + start_off2, len2, 
+  //                                                          parameters);
   // auto time_end = std::chrono::steady_clock::now();
   // auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
   // ksw2_time += time_interval.count();
+
+  std::pair<std::string, int32_t> align1 = edlib(ref.c_str() + std::get<1>(region_pair.first.first) + ref_off1, len1, 
+                                                            query1.c_str() + start_off1, len1);
+  std::pair<std::string, int32_t> align2 = edlib(ref.c_str() + std::get<1>(region_pair.second.first) + ref_off2, len2, 
+                                                            query2.c_str() + start_off2, len2);
 
   int prop_aligned = (float)abs(abs(insert_size) - (int32_t)parameters.insert_size) < 5 * parameters.sd ? 0x2 : 0x0;
 
@@ -275,26 +293,26 @@ std::pair<mapping_t, mapping_t> pair_mapping(const std::string& qname,
   m1.flag = 0x1 | prop_aligned | (std::get<2>(region_pair.first.first) ? 0x10 : 0x0) 
                 | (std::get<2>(region_pair.second.first) ? 0x20 : 0x0) | 0x40;
   m1.pos = std::get<1>(region_pair.first.first) + ref_off1 + 1;
-  m1.mapq = (uint32_t)round((double)std::get<0>(cigar1) / (query1.size() - start_off1 - end_off1) * 60);
-  m1.cigar = preclip1 + std::get<2>(cigar1) + postclip1;
+  m1.mapq = (uint32_t)round((1.0 - (double)align1.second / (query1.size() - start_off1 - end_off1)) * 60);
+  m1.cigar = preclip1 + align1.first + postclip1;
   m1.pnext = std::get<1>(region_pair.second.first) + ref_off2 + 1;
   m1.tlen = insert_size;
   m1.seq = query1;
   m1.qual = qual1;
-  m1.nm = query1.size() - std::get<0>(cigar1) - start_off1 - end_off1;
-  m1.as = std::get<1>(cigar1);
+  m1.nm = align1.second;
+  m1.as = 0;
   
   m2.flag = 0x1 | prop_aligned | (std::get<2>(region_pair.second.first) ? 0x10 : 0x0) 
                 | (std::get<2>(region_pair.first.first) ? 0x20 : 0x0) | 0x80;
   m2.pos = std::get<1>(region_pair.second.first) + ref_off2 + 1;
-  m2.mapq = (uint32_t)round((double)std::get<0>(cigar2) / (query2.size() - (start_off2 + end_off2)) * 60);
-  m2.cigar = preclip2 + std::get<2>(cigar2) + postclip2;
+  m2.mapq = (uint32_t)round((1.0 - (double)align2.second / (query2.size() - start_off2 - end_off2)) * 60);
+  m2.cigar = preclip2 + align2.first + postclip2;
   m2.pnext = std::get<1>(region_pair.first.first) + ref_off1 + 1;
   m2.tlen = -insert_size;
   m2.seq = query2;
   m2.qual = qual2;
-  m2.nm = query2.size() - std::get<0>(cigar2) - start_off2 - end_off2;
-  m2.as = std::get<1>(cigar2);
+  m2.nm = align2.second;
+  m2.as = 0;
 
   return std::make_pair(m1, m2);
 }
