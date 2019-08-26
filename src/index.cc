@@ -91,7 +91,7 @@ std::unordered_map<uint64_t, index_pos_t> index_ref(const std::vector<minimizer_
   std::unordered_map<uint64_t, index_pos_t> ref_index;
   uint32_t pos = 0;
   uint32_t num = 0;
-  uint32_t prev_min = std::get<0>(t_minimizers[0]);
+  uint64_t prev_min = std::get<0>(t_minimizers[0]);
   for (const auto& minimizer : t_minimizers) {
     if (prev_min != std::get<0>(minimizer)) {
       ref_index[prev_min] = std::make_pair(pos, num);
