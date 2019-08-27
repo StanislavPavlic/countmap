@@ -28,7 +28,6 @@ include_directories("${PROJECT_BINARY_DIR}")
 
 add_subdirectory(vendor/bioparser EXCLUDE_FROM_ALL)
 add_subdirectory(vendor/thread_pool EXCLUDE_FROM_ALL)
-add_subdirectory(vendor/edlib EXCLUDE_FROM_ALL)
 
 add_executable(countmap ${EXEC_FILES})
-target_link_libraries(countmap brown_minimizers bioparser thread_pool edlib pthread)
+target_link_libraries(countmap brown_minimizers bioparser thread_pool pthread)
