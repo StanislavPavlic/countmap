@@ -4,8 +4,49 @@
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
+#include <future>
 
 #include "index.hpp"
+#include "brown_minimizers.hpp"
+#include "thread_pool/thread_pool.hpp"
+
+std::vector<minimizer_t> collect_minimizers(const std::unique_ptr<fastaq::FastAQ>& ref, const uint32_t w, const uint32_t k, const uint32_t t) {
+  std::vector<minimizer_t> t_minimizers;
+  std::shared_ptr<thread_pool::ThreadPool> thread_pool = thread_pool::createThreadPool();
+  uint32_t start = 0;
+  uint32_t end = 0;
+  while (end < ref->sequence.size()) {
+    while (start < ref->sequence.size() && ref->sequence[end] == 'N') start++;
+    if (start == ref->sequence.size()) break;
+    end = start;
+    while (end < ref->sequence.size() && ref->sequence[end] != 'N') end++;
+    uint32_t len = end - start;
+    if (len >= w + k + 1) {
+      std::vector<std::future<std::vector<minimizer_t>>> thread_futures_ref;
+      for (uint32_t tasks = 0; tasks < t - 1; ++tasks) {
+        thread_futures_ref.emplace_back(thread_pool->submit(brown::minimizers,
+            ref->sequence.c_str() + start + tasks * len / t,
+            len / t + w + k - 1,
+            k, w));
+      }
+      thread_futures_ref.emplace_back(thread_pool->submit(brown::minimizers,
+            ref->sequence.c_str() + start + (t - 1) * len / t,
+            len - (t - 1) * len / t,
+            k, w));
+
+      for (uint32_t i = 0; i < t; ++i) {
+        thread_futures_ref[i].wait();
+        uint32_t offset = start + i * len / t;
+        for (auto& el : thread_futures_ref[i].get()) {
+          std::get<1>(el) += offset;
+          t_minimizers.push_back(el);
+        }
+      }
+    }
+    start = end;
+  }
+  return t_minimizers;
+}
 
 // Remove f most frequent minimizers, prepare target minimizers vector for index structure
 // Args: t_minimizers - list of target minimizers
@@ -50,7 +91,7 @@ std::unordered_map<uint64_t, index_pos_t> index_ref(const std::vector<minimizer_
   std::unordered_map<uint64_t, index_pos_t> ref_index;
   uint32_t pos = 0;
   uint32_t num = 0;
-  uint32_t prev_min = std::get<0>(t_minimizers[0]);
+  uint64_t prev_min = std::get<0>(t_minimizers[0]);
   for (const auto& minimizer : t_minimizers) {
     if (prev_min != std::get<0>(minimizer)) {
       ref_index[prev_min] = std::make_pair(pos, num);

@@ -1,3 +1,4 @@
+#include <iostream>
 #include <cstdlib>
 #include <cstdint>
 #include <cstring>
@@ -8,14 +9,36 @@
 #include <utility>
 #include <tuple>
 #include <algorithm>
-#include <iostream>
+#include <chrono>
 
 #include "sam.hpp"
 #include "mapping_params.hpp"
 #include "mapping.hpp"
 #include "ksw2.h"
 
+// extern double ksw2_time;
+
 std::unordered_map<uint8_t, uint8_t> c = {{'C', 0}, {'A', 1}, {'T', 2}, {'U', 2}, {'G', 3}};
+
+// Update offset values according to clipping and strand
+// Args: clip   - clipping size
+//       off1   - first offset value
+//       off2   - second offset value
+//       strand - mapping strand
+// Return: none
+void update_offset(uint32_t clip, uint32_t& off1, uint32_t& off2, bool strand) {
+  if (clip) {
+    if (strand) {
+      if (clip > off1) {
+        off1 = clip;
+      }
+    } else {
+      if (clip > off2) {
+        off2 = clip;
+      }
+    }
+  }
+}
 
 // Perform KSW2 algorithm on found region, return cigar
 // Args: target     - target sequence
@@ -72,6 +95,8 @@ std::tuple<uint32_t, int32_t, std::string> ksw2(const char* target, const uint32
 
   free(ez.cigar); free(ts); free(qs);
 
+
+
   return std::make_tuple(matches, ez.score, cigar);
 }
 
@@ -79,6 +104,20 @@ std::tuple<uint32_t, int32_t, std::string> ksw2(const char* target, const uint32
 // Args: m - mapping information
 // Return: SAM format string
 std::string sam_format(const mapping_t& m) {
+  // std::cerr << "ENTERED SAM" << std::endl;
+  // std::cerr << m.qname << std::endl;
+  // std::cerr << m.flag << std::endl;
+  // std::cerr << m.rname << std::endl;
+  // std::cerr << m.pos << std::endl;
+  // std::cerr << m.mapq << std::endl;
+  // std::cerr << m.cigar << std::endl;
+  // std::cerr << m.rnext << std::endl;
+  // std::cerr << m.pnext << std::endl;
+  // std::cerr << m.tlen << std::endl;
+  // std::cerr << m.seq << std::endl;
+  // std::cerr << m.qual << std::endl;
+  // std::cerr << m.nm << std::endl;
+  // std::cerr << m.as << std::endl;
   std::string sam = m.qname + "\t" +
                     std::to_string(m.flag) + "\t" +
                     m.rname + "\t" +
@@ -92,6 +131,7 @@ std::string sam_format(const mapping_t& m) {
                     (m.flag & 0x100 ? "*" : m.qual) + "\t" +
                     "NM:i:" + std::to_string(m.nm) + "\t" +
                     "AS:i:" + std::to_string(m.as) + "\n";
+  // std::cerr << "EXIT SAM" << std::endl;                    
   return sam;
 }
 
@@ -110,65 +150,45 @@ mapping_t single_mapping(const std::string& qname, const std::string& query,
                          const std::string& ref, const region_t& region, 
                          const mapping_params_t& parameters, 
                          const std::pair<int32_t, int32_t>& clipped) {
-  uint32_t start_off = 0;
-  uint32_t end_off = 0;
+  uint32_t start_off = std::get<2>(region.first)
+                        ? query.size() - std::get<0>(region.second)
+                        : std::get<0>(region.first);
+  uint32_t end_off = std::get<2>(region.first)
+                      ? std::get<0>(region.first)
+                      : query.size() - std::get<0>(region.second);
+  uint32_t ref_off = start_off;                      
+  
   std::string preclip, postclip;
-  if (clipped.first) {
-    if (std::get<2>(region.first)) {
-      if (std::get<0>(region.second) > query.size() - clipped.first) {
-        end_off = std::get<0>(region.second) - (query.size() - clipped.first);
-      }
-      postclip = std::to_string(query.size() - (std::get<0>(region.second) - end_off)) + "S";
-    } else {
-      if (std::get<0>(region.first) < clipped.first) {
-        start_off = clipped.first - std::get<0>(region.first);
-      }
-      preclip = std::to_string(std::get<0>(region.first) + start_off) + "S";
-    }
+  update_offset(clipped.first, end_off, start_off, std::get<2>(region.first));
+  update_offset(clipped.second, start_off, end_off, std::get<2>(region.first));
+
+  ref_off = start_off - ref_off;
+  if (start_off) {
+    preclip = std::to_string(start_off) + "S";
   }
-  if (clipped.second) {
-    if (std::get<2>(region.first)) {
-      if (std::get<0>(region.first) < clipped.second) {
-        start_off = clipped.second - std::get<0>(region.first);
-      }
-      preclip = std::to_string(std::get<0>(region.first) + start_off) + "S";
-    } else {
-      if (std::get<0>(region.second) > query.size() - clipped.second) {
-        end_off = std::get<0>(region.second) - (query.size() - clipped.second);
-      }
-      postclip = std::to_string(query.size() - (std::get<0>(region.second) - end_off)) + "S";
-    }
+  if (end_off) {
+    postclip = std::to_string(end_off) + "S";
   }
 
-  uint32_t len = (std::get<0>(region.second) - end_off) - (std::get<0>(region.first) + start_off);
+  uint32_t len = (query.size() - end_off) - start_off;
 
-  // if (std::get<1>(region.first) + start_off >= ref.size()) {
-  //   std::cerr << "Start off " << std::get<1>(region.first) + start_off << " | " << ref.size() << std::endl;
-  //   std::cerr << qname << ", (" << std::get<0>(region.first) << ", " << std::get<1>(region.first) << ")-(" << std::get<0>(region.second) << ", " << std::get<1>(region.second) << "), strand " << std::get<2>(region.first) << std::endl;
-  // }
-  // if (std::get<1>(region.first) + start_off + len > ref.size()) {
-  //   std::cerr << "End off " << std::get<1>(region.first) + start_off + len << " | " << ref.size() << std::endl;
-  //   std::cerr << qname << ", (" << std::get<0>(region.first) << ", " << std::get<1>(region.first) << ")-(" << std::get<0>(region.second) << ", " << std::get<1>(region.second) << "), strand " << std::get<2>(region.first) << std::endl;
-  // }
-
-  std::tuple<uint32_t, int32_t, std::string> cigar = ksw2(ref.c_str() + std::get<1>(region.first) + start_off, len, 
-                                                          query.c_str() + std::get<0>(region.first) + start_off, len, 
+  std::tuple<uint32_t, int32_t, std::string> cigar = ksw2(ref.c_str() + std::get<1>(region.first) + ref_off, len, 
+                                                          query.c_str() + start_off, len, 
                                                           parameters);
-
   mapping_t m;
 
-  m.qname = qname.substr(0, qname.find('/', 0));
+  m.qname = qname;
   m.flag = std::get<2>(region.first) ? 0x10 : 0x0;
   m.rname = rname;
-  m.pos = std::get<1>(region.first) + 1;
-  m.mapq = (uint32_t)round((double)std::get<0>(cigar) / query.size() * 60);;
+  m.pos = std::get<1>(region.first) + (start_off - ref_off) + 1;
+  m.mapq = (uint32_t)round((double)std::get<0>(cigar) / (query.size() - start_off - end_off) * 60);;
   m.cigar = preclip + std::get<2>(cigar) + postclip;
   m.rnext = "*";
   m.pnext = 0;
   m.tlen = 0;
-  m.seq = query.substr(std::get<0>(region.first), std::get<0>(region.second) - std::get<0>(region.first));
-  m.qual = qual.substr(std::get<0>(region.first), std::get<0>(region.second) - std::get<0>(region.first));
-  m.nm = query.size() - std::get<0>(cigar) - clipped.first - clipped.second;
+  m.seq = query;
+  m.qual = qual;
+  m.nm = query.size() - std::get<0>(cigar) - start_off - end_off;
   m.as = std::get<1>(cigar);
 
   return m;
@@ -197,121 +217,85 @@ std::pair<mapping_t, mapping_t> pair_mapping(const std::string& qname,
                         ? std::get<1>(region_pair.second.second) - std::get<1>(region_pair.first.first)
                         : std::get<1>(region_pair.second.first) - std::get<1>(region_pair.first.second);
 
-  uint32_t start_off1 = 0;
-  uint32_t start_off2 = 0;
-  uint32_t end_off1 = 0;
-  uint32_t end_off2 = 0;
-  // uint32_t start1 = std::get<2>(region_pair.first.first) ? clipped1.second : clipped1.first;
-  // uint32_t len1 = query1.size() - clipped1.first - clipped1.second;
-  // uint32_t start2 = std::get<2>(region_pair.second.first) ? clipped2.second : clipped2.first;
-  // uint32_t len2 = query2.size() - clipped2.first - clipped2.second;
-
+  uint32_t start_off1 = std::get<2>(region_pair.first.first)
+                        ? query1.size() - std::get<0>(region_pair.first.second)
+                        : std::get<0>(region_pair.first.first);
+  uint32_t start_off2 = std::get<2>(region_pair.second.first)
+                        ? query2.size() - std::get<0>(region_pair.second.second)
+                        : std::get<0>(region_pair.second.first);
+  uint32_t end_off1 = std::get<2>(region_pair.first.first)
+                      ? std::get<0>(region_pair.first.first)
+                      : query1.size() - std::get<0>(region_pair.first.second);
+  uint32_t end_off2 = std::get<2>(region_pair.second.first)
+                      ? std::get<0>(region_pair.second.first)
+                      : query2.size() - std::get<0>(region_pair.second.second);
+  uint32_t ref_off1 = start_off1;
+  uint32_t ref_off2 = start_off2;                      
+  update_offset(clipped1.first, end_off1, start_off1, std::get<2>(region_pair.first.first));
+  update_offset(clipped1.second, start_off1, end_off1, std::get<2>(region_pair.first.first));
+  update_offset(clipped2.first, end_off2, start_off2, std::get<2>(region_pair.second.first));
+  update_offset(clipped2.second, start_off2, end_off2, std::get<2>(region_pair.second.first));
+  ref_off1 = start_off1 - ref_off1;
+  ref_off2 = start_off2 - ref_off2;
+  
   std::string preclip1, postclip1, preclip2, postclip2;
-  if (clipped1.first) {
-    if (std::get<2>(region_pair.first.first)) {
-      if (std::get<0>(region_pair.first.second) > query1.size() - clipped1.first) {
-        end_off1 = std::get<0>(region_pair.first.second) - (query1.size() - clipped1.first);
-      }
-      postclip1 = std::to_string(query1.size() - (std::get<0>(region_pair.first.second) - end_off1)) + "S";
-    } else {
-      if (std::get<0>(region_pair.first.first) < (uint32_t)clipped1.first) {
-        start_off1 = clipped1.first - std::get<0>(region_pair.first.first);
-      }
-      preclip1 = std::to_string(std::get<0>(region_pair.first.first) + start_off1) + "S";
-    }
+  if (start_off1) {
+    preclip1 = std::to_string(start_off1) + "S";
   }
-  if (clipped1.second) {
-    if (std::get<2>(region_pair.first.first)) {
-      if (std::get<0>(region_pair.first.first) < (uint32_t)clipped1.second) {
-        start_off1 = clipped1.second - std::get<0>(region_pair.first.first);
-      }
-      preclip1 = std::to_string(std::get<0>(region_pair.first.first) + start_off1) + "S";
-    } else {
-      if (std::get<0>(region_pair.first.second) > query1.size() - clipped1.second) {
-        end_off1 = std::get<0>(region_pair.first.second) - (query1.size() - clipped1.second);
-      }
-      postclip1 = std::to_string(query1.size() - (std::get<0>(region_pair.first.second) - end_off1)) + "S";
-    }
+  if (end_off1) {
+    postclip1 = std::to_string(end_off1) + "S";
   }
-  if (clipped2.first) {
-    if (std::get<2>(region_pair.second.first)) {
-      if (std::get<0>(region_pair.second.second) > query2.size() - clipped2.first) {
-        end_off2 = std::get<0>(region_pair.second.second) - (query2.size() - clipped2.first);
-      }
-      postclip2 = std::to_string(query2.size() - (std::get<0>(region_pair.second.second) - end_off2)) + "S";
-    } else {
-      if (std::get<0>(region_pair.second.first) < (uint32_t)clipped2.first) {
-        start_off2 = clipped2.first - std::get<0>(region_pair.second.first);
-      }
-      preclip2 = std::to_string(std::get<0>(region_pair.second.first) + start_off2) + "S";
-    }
+  if (start_off2) {
+    preclip2 = std::to_string(start_off2) + "S";
   }
-  if (clipped2.second) {
-    if (std::get<2>(region_pair.second.first)) {
-      if (std::get<0>(region_pair.second.first) < (uint32_t)clipped2.second) {
-        start_off2 = clipped2.second - std::get<0>(region_pair.second.first);
-      }
-      preclip2 = std::to_string(std::get<0>(region_pair.second.first) + start_off2) + "S";
-    } else {
-      if (std::get<0>(region_pair.second.second) > query2.size() - clipped2.second) {
-        end_off2 = std::get<0>(region_pair.second.second) - (query2.size() - clipped2.second);
-      }
-      postclip2 = std::to_string(query2.size() - (std::get<0>(region_pair.second.second) - end_off2)) + "S";
-    }
+  if (end_off2) {
+    postclip2 = std::to_string(end_off2) + "S";
   }
+  
+  uint32_t len1 = (query1.size() - end_off1) - start_off1;
+  uint32_t len2 = (query2.size() - end_off2) - start_off2;
 
-  uint32_t len1 = (std::get<0>(region_pair.first.second) - end_off1) - (std::get<0>(region_pair.first.first) + start_off1);
-  uint32_t len2 = (std::get<0>(region_pair.second.second) - end_off2) - (std::get<0>(region_pair.second.first) + start_off2);
-
-  std::tuple<uint32_t, int32_t, std::string> cigar1 = ksw2(ref.c_str() + std::get<1>(region_pair.first.first) + start_off1, len1, 
-                                                           query1.c_str() + std::get<0>(region_pair.first.first) + start_off1, len1, 
+  // auto time_start = std::chrono::steady_clock::now();
+  std::tuple<uint32_t, int32_t, std::string> cigar1 = ksw2(ref.c_str() + std::get<1>(region_pair.first.first) + ref_off1, len1, 
+                                                           query1.c_str() + start_off1, len1, 
                                                            parameters);
-  std::tuple<uint32_t, int32_t, std::string> cigar2 = ksw2(ref.c_str() + std::get<1>(region_pair.second.first) + start_off2, len2, 
-                                                           query2.c_str() + std::get<0>(region_pair.second.first) + start_off2, len2, 
+  std::tuple<uint32_t, int32_t, std::string> cigar2 = ksw2(ref.c_str() + std::get<1>(region_pair.second.first) + ref_off2, len2, 
+                                                           query2.c_str() + start_off2, len2, 
                                                            parameters);
+  // auto time_end = std::chrono::steady_clock::now();
+  // auto time_interval = std::chrono::duration_cast<std::chrono::duration<double>>(time_end - time_start);
+  // ksw2_time += time_interval.count();
 
   int prop_aligned = (float)abs(abs(insert_size) - (int32_t)parameters.insert_size) < 5 * parameters.sd ? 0x2 : 0x0;
-
-  double z = ((double)abs(insert_size) - parameters.insert_size) / (5 * parameters.sd);              
 
   mapping_t m1, m2;
 
   m1.qname = m2.qname = qname.substr(0, qname.find('/', 0));
+  m1.rname = m2.rname = rname;
+  m1.rnext = m2.rnext = "=";
 
   m1.flag = 0x1 | prop_aligned | (std::get<2>(region_pair.first.first) ? 0x10 : 0x0) 
                 | (std::get<2>(region_pair.second.first) ? 0x20 : 0x0) | 0x40;
+  m1.pos = std::get<1>(region_pair.first.first) + ref_off1 + 1;
+  m1.mapq = (uint32_t)round((double)std::get<0>(cigar1) / (query1.size() - start_off1 - end_off1) * 60);
+  m1.cigar = preclip1 + std::get<2>(cigar1) + postclip1;
+  m1.pnext = std::get<1>(region_pair.second.first) + ref_off2 + 1;
+  m1.tlen = insert_size;
+  m1.seq = query1;
+  m1.qual = qual1;
+  m1.nm = query1.size() - std::get<0>(cigar1) - start_off1 - end_off1;
+  m1.as = std::get<1>(cigar1);
+  
   m2.flag = 0x1 | prop_aligned | (std::get<2>(region_pair.second.first) ? 0x10 : 0x0) 
                 | (std::get<2>(region_pair.first.first) ? 0x20 : 0x0) | 0x80;
-
-  m1.rname = m2.rname = rname;
-
-  m1.pos = std::get<1>(region_pair.first.first) + 1;
-  m2.pos = std::get<1>(region_pair.second.first) + 1;
-
-  m1.mapq = (uint32_t)round(std::max((double)std::get<0>(cigar1) / (query1.size() - (clipped1.first + clipped1.second)) * 60 - z*z, (double)0));
-  m2.mapq = (uint32_t)round(std::max((double)std::get<0>(cigar2) / (query2.size() - (clipped2.first + clipped2.second)) * 60 - z*z, (double)0));
-
-  m1.cigar = preclip1 + std::get<2>(cigar1) + postclip1;
+  m2.pos = std::get<1>(region_pair.second.first) + ref_off2 + 1;
+  m2.mapq = (uint32_t)round((double)std::get<0>(cigar2) / (query2.size() - (start_off2 + end_off2)) * 60);
   m2.cigar = preclip2 + std::get<2>(cigar2) + postclip2;
-
-  m1.rnext = m2.rnext = "=";
-
-  m1.pnext = std::get<1>(region_pair.second.first) + 1;
-  m2.pnext = std::get<1>(region_pair.first.first) + 1;
-
-  m1.tlen = insert_size;
+  m2.pnext = std::get<1>(region_pair.first.first) + ref_off1 + 1;
   m2.tlen = -insert_size;
-
-  m1.seq = query1.substr(std::get<0>(region_pair.first.first), std::get<0>(region_pair.first.second) - std::get<0>(region_pair.first.first));
-  m2.seq = query2.substr(std::get<0>(region_pair.second.first), std::get<0>(region_pair.second.second) - std::get<0>(region_pair.second.first));
-
-  m1.qual = qual1.substr(std::get<0>(region_pair.first.first), std::get<0>(region_pair.first.second) - std::get<0>(region_pair.first.first));
-  m2.qual = qual2.substr(std::get<0>(region_pair.second.first), std::get<0>(region_pair.second.second) - std::get<0>(region_pair.second.first));
-
-  m1.nm = query1.size() - std::get<0>(cigar1) - clipped1.first - clipped1.second;
-  m2.nm = query2.size() - std::get<0>(cigar2) - clipped2.first - clipped2.second;
-
-  m1.as = std::get<1>(cigar1);
+  m2.seq = query2;
+  m2.qual = qual2;
+  m2.nm = query2.size() - std::get<0>(cigar2) - start_off2 - end_off2;
   m2.as = std::get<1>(cigar2);
 
   return std::make_pair(m1, m2);
