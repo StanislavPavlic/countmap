@@ -1,9 +1,9 @@
-#include <iostream>
 #include <vector>
 #include <unordered_map>
 #include <tuple>
 #include <utility>
 #include <algorithm>
+#include <iostream>
 
 #include "region.hpp"
 
@@ -35,6 +35,19 @@ void find_minimizer_hits(std::vector<minimizer_hit_t>& fwd, std::vector<minimize
       }
     }
   }
+}
+
+std::pair<std::vector<minimizer_hit_t>, std::vector<minimizer_hit_t>> circular_check(
+    const std::vector<minimizer_hit_t>& hits, const uint32_t region_size, const uint32_t ref_size) {
+  std::vector<minimizer_hit_t> circ_s;
+  for (uint32_t i = 0; i < hits.size() && std::get<1>(hits[i]) < region_size; ++i) {
+    circ_s.push_back(hits[i]);
+  }
+  std::vector<minimizer_hit_t> circ_e;
+  for (uint32_t i = 0; i < hits.size() && std::get<1>(hits[hits.size() - 1 - i]) > ref_size - region_size; ++i) {
+    circ_e.push_back(hits[hits.size() - 1 - i]);
+  }
+  return std::make_pair(circ_s, circ_e);
 }
 
 // Count hits by two neighbouring regions, e.g. [0,1], [100, 101], [101, 102], ...
@@ -100,8 +113,75 @@ bin_t extract_candidates(const std::vector<minimizer_hit_t>& hits, const uint32_
 //       region_size - size of region on reference from which hits were counted
 // Return: pair of corresponding lists containing lists of hits that were checked for insert size
 paired_checked_t check_pairing(std::pair<bin_t, bin_t>& candidates, const uint32_t insert_size,
-                               const uint32_t read_size) {
+                               const uint32_t read_size, const uint32_t ref_size) {
   paired_checked_t checked;
+  bool circd = false;
+  minimizer_hit_t flag;
+  std::get<0>(flag) = -1;
+  std::get<1>(flag) = -1;
+  std::get<2>(flag) = 0;
+
+  if (candidates.first.find(0) != candidates.first.end() && candidates.first.find(ref_size / read_size) != candidates.first.end()) {
+    bin_t::const_iterator found;
+    // std::cerr << "ENTER 1" << std::endl;
+
+    if (!std::get<2>(candidates.first[0][0])) {
+      if ((found = candidates.second.find((insert_size - read_size) / read_size)) != candidates.second.end()
+          || (found = candidates.second.find(((insert_size - read_size) / read_size) - 1)) != candidates.second.end()
+          || (found = candidates.second.find(((insert_size - read_size) / read_size) + 1)) != candidates.second.end()) {
+        // std::cerr << std::get<1>(candidates.first[0][0]) << ", " << std::get<1>(candidates.first[ref_size / read_size][0]) << ", " << std::get<1>(found->second[0]) << std::endl;
+        checked.first.emplace_back(candidates.first[0].begin(), candidates.first[0].end());
+        checked.second.emplace_back(found->second.begin(), found->second.end());
+        checked.first.emplace_back(candidates.first[ref_size / read_size].begin(), candidates.first[ref_size / read_size].end());
+        checked.second.emplace_back(1, flag);
+        circd = true;
+      }
+    } else {
+      if ((found = candidates.second.find((ref_size - (insert_size - read_size)) / read_size)) != candidates.second.end()
+          || (found = candidates.second.find((ref_size - ((insert_size - read_size)) / read_size) - 1)) != candidates.second.end()
+          || (found = candidates.second.find((ref_size - ((insert_size - read_size)) / read_size) + 1)) != candidates.second.end()) {
+        // std::cerr << std::get<1>(candidates.first[0][0]) << ", " << std::get<1>(candidates.first[ref_size / read_size][0]) << ", " << std::get<1>(found->second[0]) << std::endl;
+        checked.first.emplace_back(candidates.first[0].begin(), candidates.first[0].end());
+        checked.second.emplace_back(found->second.begin(), found->second.end());
+        checked.first.emplace_back(candidates.first[ref_size / read_size].begin(), candidates.first[ref_size / read_size].end());
+        checked.second.emplace_back(1, flag);
+        circd = true;
+      }
+    }
+    // std::cerr << "EXIT 1" << std::endl;
+  }
+  if (candidates.second.find(0) != candidates.second.end() && candidates.second.find(ref_size / read_size) != candidates.second.end()) {
+    bin_t::const_iterator found;
+    // std::cerr << "ENTER 2" << std::endl;
+
+    if (!std::get<2>(candidates.second[0][0])) {
+      if ((found = candidates.first.find((insert_size - read_size) / read_size)) != candidates.first.end()
+          || (found = candidates.first.find(((insert_size - read_size) / read_size) - 1)) != candidates.first.end()
+          || (found = candidates.first.find(((insert_size - read_size) / read_size) + 1)) != candidates.first.end()) {
+        // std::cerr << std::get<1>(candidates.second[0][0]) << ", " << std::get<1>(candidates.second[ref_size / read_size][0]) << ", " << std::get<1>(found->second[0]) << std::endl;
+        checked.first.emplace_back(found->second.begin(), found->second.end());
+        checked.second.emplace_back(candidates.second[0].begin(), candidates.second[0].end());
+        checked.first.emplace_back(1, flag);
+        checked.second.emplace_back(candidates.second[ref_size / read_size].begin(), candidates.second[ref_size / read_size].end());
+        circd = true;
+      }
+    } else {
+      if ((found = candidates.first.find((ref_size - (insert_size - read_size)) / read_size)) != candidates.first.end()
+          || (found = candidates.first.find((ref_size - ((insert_size - read_size)) / read_size) - 1)) != candidates.first.end()
+          || (found = candidates.first.find((ref_size - ((insert_size - read_size)) / read_size) + 1)) != candidates.first.end()) {
+        // std::cerr << std::get<1>(candidates.second[0][0]) << ", " << std::get<1>(candidates.second[ref_size / read_size][0]) << ", " << std::get<1>(found->second[0]) << std::endl;
+        checked.first.emplace_back(found->second.begin(), found->second.end());
+        checked.second.emplace_back(candidates.second[0].begin(), candidates.second[0].end());
+        checked.first.emplace_back(1, flag);
+        checked.second.emplace_back(candidates.second[ref_size / read_size].begin(), candidates.second[ref_size / read_size].end());
+        circd = true;
+      }
+    }
+    // std::cerr << "EXIT 2" << std::endl;
+  }
+  if (circd) {
+    return checked;
+  }
 
   for (const auto& bin : candidates.first) {
     bin_t::const_iterator found;
@@ -209,7 +289,7 @@ void expand_region(region_t& reg, uint32_t read_size, uint32_t k, uint32_t max_s
     }
   } else {
     if (std::get<1>(reg.first) < read_size - (std::get<0>(reg.second) + k)) {
-      std::get<0>(reg.second) += std::get<1>(reg.first);
+      std::get<0>(reg.second) += std::get<1>(reg.first) + k;
       std::get<1>(reg.first) = 0;
     } else {
       std::get<1>(reg.first) -= read_size - (std::get<0>(reg.second) + k);

@@ -24,6 +24,30 @@
 #include "bioparser/bioparser.hpp"
 #include "thread_pool/thread_pool.hpp"
 
+// double clip_time = 0;
+// double minimizer_time = 0;
+// double hits_time = 0;
+// double radix_time = 0;
+// double candidates_time = 0;
+// double check_time = 0;
+// double circ_time = 0;
+// double clip_time_2 = 0;
+// double minimizer_time_2 = 0;
+// double hits_time_2 = 0;
+// double radix_time_2 = 0;
+// double candidates_time_2 = 0;
+// double check_time_2 = 0;
+// double circ_time_2 = 0;
+// double region_time = 0;
+// double expand_time = 0;
+// double revcomp_time = 0;
+// double ksw2_time = 0;
+// double process_time = 0;
+// double process_time_2 = 0;
+// double second_time = 0;
+// double sam_time = 0;
+// double unmapped_time = 0;
+
 // Minimizer: value, position, origin
 typedef std::tuple<uint64_t, uint32_t, bool> minimizer_t;
 // Index: position, range
@@ -53,12 +77,15 @@ static struct option long_options[] = {
   {"gap-open", required_argument, NULL, 'o'},
   {"gap-extend", required_argument, NULL, 'e'},
   {"band", required_argument, NULL, 'b'},
-  {"kmers", required_argument, NULL, 'k'},
+  {"kmer", required_argument, NULL, 'k'},
+  {"kmer_s", required_argument, NULL, 'K'},
   {"window_length", required_argument, NULL, 'w'},
+  {"window_length_s", required_argument, NULL, 'W'},
   {"frequency", required_argument, NULL, 'f'},
   {"insert_size", required_argument, NULL, 'i'},
   {"st_deviation", required_argument, NULL, 's'},
   {"threshold", required_argument, NULL, 'T'},
+  {"threshold_s", required_argument, NULL, 'S'},
   {"threads", required_argument, NULL, 't'},
   {"batch_size", required_argument, NULL, 'B'},
   {NULL, no_argument, NULL, 0}
@@ -82,56 +109,67 @@ void help(void) {
          "                           .fq.gz\n\n"
          
          "OPTIONS:\n"
-         "  -h  or  --help           show a summary of available options and exit\n"
-         "  -v  or  --version        show the current version number and exit\n"
-         "  -p  or  --paired         paired-end mode\n"
-         "  -I  or  --infer          only output inferred insert size and standard deviation\n"
-         "  -a  or  --all            output all found mappings\n"
-         "  -m  or  --match          <int>\n"
-         "                             default: 2\n"
-         "                             match value\n"
-         "  -M  or  --mismatch       <int>\n"
-         "                             default: 4\n"
-         "                             mismatch value\n"
-         "  -o  or  --gap-open       <int>\n"
-         "                             default: 4\n"
-         "                             gap open value\n"
-         "  -e  or  --gap-extend     <int>\n"
-         "                             default: 2\n"
-         "                             gap extend value\n"
-         "  -b  or  --band           <int>\n"
-         "                             default: -1\n"
-         "                             ksw2 alignment band, band < 0 => disabled\n"
-         "                             option: -1  => set band to half of QLEN\n"
-         "  -k  or  --kmers          <uint>\n"
-         "                             default: 12\n"
-         "                             constraints: largest supported is 32\n"
-         "                             number of letters in substrings\n"
-         "  -w  or  --window_length  <uint>\n"
-         "                             default: 5\n"
-         "                             length of window\n"
-         "  -f  or  --frequency      <float>\n"
-         "                             default: 0.001\n"
-         "                             constraints: must be from [0, 1]\n"
-         "                             number of most frequent minimizers that\n"
-         "                             are not taken into account\n"
-         "  -i  or  --insert_size    <uint>\n"
-         "                             default: 215\n"
-         "                             fragment insert size mean\n"
-         "                             if set overrides automatic insert size inferrence\n"
-         "  -s  or  --st_deviation   <float>\n"
-         "                             default: 10.0\n"
-         "                             fragment insert size standard deviation\n"
-         "  -T  or  --threshold      <uint>\n"
-         "                             default: 2\n"
-         "                             number of hits needed in order to consider\n"
-         "                             a region a candidate for mapping\n"
-         "  -t  or  --threads        <uint>\n"
-         "                             default: 3\n"
-         "                             number of threads\n"
-         "  -B  or  --batch_size     <uint>\n"
-         "                             default: 256\n"
-         "                             read loading batch size in MB\n"
+         "  -h  or  --help             show a summary of available options and exit\n"
+         "  -v  or  --version          show the current version number and exit\n"
+         "  -p  or  --paired           paired-end mode\n"
+         "  -I  or  --infer            only output inferred insert size and standard deviation\n"
+         "  -a  or  --all              output all found mappings\n"
+         "  -m  or  --match            <int>\n"
+         "                               default: 2\n"
+         "                               match value\n"
+         "  -M  or  --mismatch         <int>\n"
+         "                               default: 4\n"
+         "                               mismatch value\n"
+         "  -o  or  --gap-open         <int>\n"
+         "                               default: 4\n"
+         "                               gap open value\n"
+         "  -e  or  --gap-extend       <int>\n"
+         "                               default: 2\n"
+         "                               gap extend value\n"
+         "  -b  or  --band             <int>\n"
+         "                               default: -1\n"
+         "                               ksw2 alignment band, band < 0 => disabled\n"
+         "                               option: -1  => set band to half of QLEN\n"
+         "  -k  or  --kmer             <uint>\n"
+         "                               default: 12\n"
+         "                               constraints: largest supported is 32\n"
+         "                               k-mer size\n"
+         "  -K  or  --kmer_s           <uint>\n"
+         "                               default: 9\n"
+         "                               constraints: largest supported is 32\n"
+         "                               k-mer size (second round)\n"
+         "  -w  or  --window_length    <uint>\n"
+         "                               default: 5\n"
+         "                               length of window\n"
+         "  -W  or  --window_length_s  <uint>\n"
+         "                               default: 2\n"
+         "                               length of window (second round)\n"
+         "  -f  or  --frequency        <float>\n"
+         "                               default: 0.01\n"
+         "                               constraints: must be from [0, 1]\n"
+         "                               number of most frequent minimizers that\n"
+         "                               are not taken into account\n"
+         "  -i  or  --insert_size      <uint>\n"
+         "                               default: 215\n"
+         "                               fragment insert size mean\n"
+         "                               if set overrides automatic insert size inferrence\n"
+         "  -s  or  --st_deviation     <float>\n"
+         "                               default: 10.0\n"
+         "                               fragment insert size standard deviation\n"
+         "  -T  or  --threshold        <uint>\n"
+         "                               default: 2\n"
+         "                               number of hits needed in order to consider\n"
+         "                               a region a candidate for mapping\n"
+         "  -S  or  --threshold_s      <uint>\n"
+         "                               default: 3\n"
+         "                               number of hits needed in order to consider\n"
+         "                               a region a candidate for mapping (second round)\n"
+         "  -t  or  --threads          <uint>\n"
+         "                               default: 3\n"
+         "                               number of threads\n"
+         "  -B  or  --batch_size       <uint>\n"
+         "                               default: 256\n"
+         "                               read loading batch size in MB\n"
   );
 }
 
@@ -168,9 +206,12 @@ int main(int argc, char **argv) {
   parameters.band = -1;
   parameters.k = 12;
   parameters.w = 5;
+  parameters.k_2 = 9;
+  parameters.w_2 = 2;
   parameters.f = 0.001f;
   parameters.insert_size = 215;
   parameters.threshold = 2;
+  parameters.threshold_2 = 3;
   bool paired = false;
   bool infer_is = false;
   bool set_insert = false;
@@ -178,7 +219,7 @@ int main(int argc, char **argv) {
   uint32_t batch_size = 256 * 1024 * 1024;
   std::string cl_flags;
 
-  while ((optchr = getopt_long(argc, argv, "hvpIam:M:o:e:b:k:w:f:i:s:T:t:B:", long_options, NULL)) != -1) {
+  while ((optchr = getopt_long(argc, argv, "hvpIam:M:o:e:b:k:K:w:W:f:i:s:T:S:t:B:", long_options, NULL)) != -1) {
     cl_flags += "-", cl_flags += optchr, cl_flags += " ";
     if (optarg != nullptr) cl_flags += optarg, cl_flags += " ";
     switch (optchr) {
@@ -226,8 +267,16 @@ int main(int argc, char **argv) {
         parameters.k = atoi(optarg);
         break;
       }
+      case 'K': {
+        parameters.k_2 = atoi(optarg);
+        break;
+      }
       case 'w': {
         parameters.w = atoi(optarg);
+        break;
+      }
+      case 'W': {
+        parameters.w_2 = atoi(optarg);
         break;
       }
       case 'f': {
@@ -249,6 +298,10 @@ int main(int argc, char **argv) {
       }
       case 'T': {
         parameters.threshold = atoi(optarg);
+        break;
+      }
+      case 'S': {
+        parameters.threshold_2 = atoi(optarg);
         break;
       }
       case 't': {
@@ -279,7 +332,6 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
-  auto i_start = std::chrono::steady_clock::now();
 
   fprintf(stderr, "[countmap-load] loading reference... ");
 
@@ -301,31 +353,17 @@ int main(int argc, char **argv) {
   fprintf(stderr, "\r[countmap-load] loaded reference           \n"
                   "[countmap-index] indexing reference... ");
 
+  auto i_start = std::chrono::steady_clock::now();
   std::shared_ptr<thread_pool::ThreadPool> thread_pool = thread_pool::createThreadPool(t);
 
-  std::vector<std::future<std::vector<minimizer_t>>> thread_futures_ref;
-  for (uint32_t tasks = 0; tasks < t - 1; ++tasks) {
-    thread_futures_ref.emplace_back(thread_pool->submit(brown::minimizers,
-        reference[0]->sequence.c_str() + tasks * reference[0]->sequence.size() / t,
-        reference[0]->sequence.size() / t + parameters.w + parameters.k - 1,
-        parameters.k, parameters.w));
-  }
-  thread_futures_ref.emplace_back(thread_pool->submit(brown::minimizers,
-        reference[0]->sequence.c_str() + (t - 1) * reference[0]->sequence.size() / t,
-        reference[0]->sequence.size() - (t - 1) * reference[0]->sequence.size() / t,
-        parameters.k, parameters.w));
-
-  std::vector<minimizer_t> t_minimizers;
-  for (uint32_t i = 0; i < t; ++i) {
-    thread_futures_ref[i].wait();
-    uint32_t offset = i * reference[0]->sequence.size() / t;
-    for (auto& el : thread_futures_ref[i].get()) {
-      std::get<1>(el) += offset;
-      t_minimizers.push_back(el);
-    }
-  }
+  std::vector<minimizer_t> t_minimizers = collect_minimizers(reference[0], parameters.w, parameters.k, t);
   prep_ref(t_minimizers, parameters.f);
   std::unordered_map<uint64_t, index_pos_t> ref_index = index_ref(t_minimizers);
+
+  std::vector<minimizer_t> t_minimizers_2 = collect_minimizers(reference[0], parameters.w_2, parameters.k_2, t);
+  prep_ref(t_minimizers_2, parameters.f / 10.0);
+  std::unordered_map<uint64_t, index_pos_t> ref_index_2 = index_ref(t_minimizers_2);
+
   fprintf(stderr, "\r[countmap-index] indexed reference        \n");
 
   fastaq::FastAQ::print_statistics(reference, reference_file);
@@ -413,9 +451,6 @@ int main(int argc, char **argv) {
       fprintf(stderr, "[countmap] batch number %u\n", batch_num++);
       fprintf(stderr, "[countmap-load] loading paired-end reads... ");
 
-
-      auto c_start = std::chrono::steady_clock::now();
-
       paired_reads_t paired_reads;
       bool status1 = parser.first->parse(paired_reads.first, batch_size);
       bool status2 = parser.second->parse(paired_reads.second, batch_size);
@@ -424,7 +459,7 @@ int main(int argc, char **argv) {
       
       fastaq::stats pr1_stats = fastaq::FastAQ::print_statistics(paired_reads.first, reads_file1);
       fastaq::stats pr2_stats = fastaq::FastAQ::print_statistics(paired_reads.second, reads_file2);
-      
+
       if (paired) {
         if (pr1_stats.num != pr2_stats.num) {
           fprintf(stderr, "[countmap] error: Paired-end read files must have equal number of reads (pairs).\n");
@@ -442,20 +477,29 @@ int main(int argc, char **argv) {
         }
       }
       
+      auto c_start = std::chrono::steady_clock::now();
       std::vector<std::future<std::string>> thread_futures;
       for (unsigned int tasks = 0; tasks < t - 1; ++tasks) {
         thread_futures.emplace_back(thread_pool->submit(paired ? map_paired : map_as_single, 
-                std::ref(ref_index), std::ref(t_minimizers), std::ref(reference[0]), std::ref(paired_reads),
+                std::ref(ref_index), std::ref(ref_index_2), std::ref(t_minimizers), std::ref(t_minimizers_2), 
+                std::ref(reference[0]), std::ref(paired_reads),
                 std::ref(parameters), tasks * paired_reads.first.size() / t, (tasks + 1) * paired_reads.first.size() / t));  
       }
       thread_futures.emplace_back(thread_pool->submit(paired ? map_paired : map_as_single, 
-                std::ref(ref_index), std::ref(t_minimizers), std::ref(reference[0]), std::ref(paired_reads),
+                std::ref(ref_index), std::ref(ref_index_2), std::ref(t_minimizers), std::ref(t_minimizers_2), 
+                std::ref(reference[0]), std::ref(paired_reads),
                 std::ref(parameters), (t - 1) * paired_reads.first.size() / t, paired_reads.first.size()));
       
+      double print_time = 0;
       for (auto& it : thread_futures) {
         it.wait();
+        auto p_start = std::chrono::steady_clock::now();
         printf("%s", it.get().c_str());
+        auto p_end = std::chrono::steady_clock::now();
+        auto p_interval = std::chrono::duration_cast<std::chrono::duration<double>>(p_end - p_start);
+        print_time += p_interval.count();
       }
+      fprintf(stderr, "[countmap-map] print time: %.2f sec\n", print_time);
 
       auto c_end = std::chrono::steady_clock::now();
       auto c_interval = std::chrono::duration_cast<std::chrono::duration<double>>(c_end - c_start);
@@ -491,7 +535,6 @@ int main(int argc, char **argv) {
       fprintf(stderr, "[countmap] batch number %u\n", batch_num++);
       fprintf(stderr, "[countmap-load] loading reads... ");
 
-      auto c_start = std::chrono::steady_clock::now();
 
       std::vector<std::unique_ptr<fastaq::FastAQ>> reads;
       bool status = parser->parse(reads, batch_size);
@@ -500,6 +543,7 @@ int main(int argc, char **argv) {
 
       fastaq::FastAQ::print_statistics(reads, reads_file);
 
+      auto c_start = std::chrono::steady_clock::now();
       std::vector<std::future<std::string>> thread_futures;
       for (unsigned int tasks = 0; tasks < t - 1; ++tasks) {
         thread_futures.emplace_back(thread_pool->submit(map_single, std::ref(ref_index), std::ref(t_minimizers),
@@ -528,6 +572,63 @@ int main(int argc, char **argv) {
   auto m_end = std::chrono::steady_clock::now();
   auto m_interval = std::chrono::duration_cast<std::chrono::duration<double>>(m_end - m_start);
   fprintf(stderr, "[countmap-map] mapping time: %.2f sec\n", m_interval.count());
+
+  // std::cerr << "Clip        " << clip_time << std::endl;
+  // std::cerr << "            " << clip_time / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Clip2       " << clip_time_2 << std::endl;
+  // std::cerr << "            " << clip_time_2 / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Minimizer   " << minimizer_time << std::endl;
+  // std::cerr << "            " << minimizer_time / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Minimizer2  " << minimizer_time_2 << std::endl;
+  // std::cerr << "            " << minimizer_time_2 / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Hits        " << hits_time << std::endl;
+  // std::cerr << "            " << hits_time / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Hits2       " << hits_time_2 << std::endl;
+  // std::cerr << "            " << hits_time_2 / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Radix       " << radix_time << std::endl;
+  // std::cerr << "            " << radix_time / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Radix2      " << radix_time_2 << std::endl;
+  // std::cerr << "            " << radix_time_2 / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Candidates  " << candidates_time << std::endl;
+  // std::cerr << "            " << candidates_time / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Candidates2 " << candidates_time_2 << std::endl;
+  // std::cerr << "            " << candidates_time_2 / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Check       " << check_time << std::endl;
+  // std::cerr << "            " << check_time / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Check2      " << check_time_2 << std::endl;
+  // std::cerr << "            " << check_time_2 / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Circ        " << circ_time << std::endl;
+  // std::cerr << "            " << circ_time / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Circ2       " << circ_time_2 << std::endl;
+  // std::cerr << "            " << circ_time_2 / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Region      " << region_time << std::endl;
+  // std::cerr << "            " << region_time / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Expand      " << expand_time << std::endl;
+  // std::cerr << "            " << expand_time / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Revcom      " << revcomp_time << std::endl;
+  // std::cerr << "            " << revcomp_time / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "  KSW2        " << ksw2_time << std::endl;
+  // std::cerr << "              " << ksw2_time / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Process     " << process_time << std::endl;
+  // std::cerr << "            " << process_time / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Process2    " << process_time_2 << std::endl;
+  // std::cerr << "            " << process_time_2 / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "SAM         " << sam_time << std::endl;
+  // std::cerr << "            " << sam_time / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Unmapped    " << unmapped_time << std::endl;
+  // std::cerr << "            " << unmapped_time / m_interval.count() * 100 << "%" << std::endl;
+
+  // double first = clip_time + minimizer_time + hits_time + radix_time + candidates_time + check_time + circ_time + process_time;
+  // double second = clip_time_2 + minimizer_time_2 + hits_time_2 + radix_time_2 + candidates_time_2 + check_time_2 + circ_time_2 + process_time_2;
+  // std::cerr << "First       " << (first / m_interval.count() * 100) << "%" << std::endl;
+  // std::cerr << "Second      " << (second / m_interval.count() * 100) << "%" << std::endl;
+
+  // double prep_time = clip_time + minimizer_time + hits_time + radix_time + candidates_time + check_time + region_time + expand_time + revcomp_time;
+  // std::cerr << "Preparation " << prep_time << std::endl;
+  // std::cerr << "            " << prep_time / m_interval.count() * 100 << "%" << std::endl;
+  // std::cerr << "Alignment   " << ksw2_time << std::endl;
+  // std::cerr << "            " << clip_time / m_interval.count() * 100 << "%" << std::endl;
+
 
   return 0;
 }
